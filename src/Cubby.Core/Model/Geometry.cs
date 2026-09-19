@@ -29,6 +29,9 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
 /// <param name="Id">显示器标识。M1 起使用系统设备名（如 \\.\DISPLAY1），spike 阶段是 "primary"。</param>
 public sealed record MonitorSurface(string Id, PixelRect Bounds, double DpiScale)
 {
+    /// <summary>是否为主显示器。用于「显示器没了」时的兜底选择，保证结果稳定可预期。</summary>
+    public bool IsPrimary { get; init; }
+
     /// <summary>把该显示器上的 DIP 矩形换算为虚拟屏幕物理像素矩形。</summary>
     public PixelRect ToPhysical(DipRect dip) => new(
         Bounds.Left + (int)Math.Round(dip.X * DpiScale),

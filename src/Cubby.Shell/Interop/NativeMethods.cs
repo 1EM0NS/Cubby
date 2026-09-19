@@ -166,6 +166,8 @@ internal static class NativeMethods
 
     internal const uint MonitorDefaultToPrimary = 1;
     internal const uint MonitorDefaultToNearest = 2;
+    internal const uint MonitorInfoFlagPrimary = 0x00000001;
+    internal const int MdtEffectiveDpi = 0;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MonitorInfo
@@ -176,6 +178,21 @@ internal static class NativeMethods
         public uint Flags;
     }
 
+    /// <summary>带设备名的显示器信息。<c>Device</c> 形如 <c>\\.\DISPLAY1</c>，宽度固定 CCHDEVICENAME=32。</summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct MonitorInfoEx
+    {
+        public int Size;
+        public Rect Monitor;
+        public Rect Work;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string Device;
+    }
+
+    internal delegate bool MonitorEnumProc(nint monitor, nint hdc, ref Rect rect, nint data);
+
     [DllImport("user32.dll")]
     internal static extern nint MonitorFromPoint(Point point, uint flags);
 
@@ -183,8 +200,24 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
 
+    /// <summary>
+    /// 注意：user32 只导出 <c>GetMonitorInfoW</c>，<c>GetMonitorInfoEx</c> 只是头文件里的宏。
+    /// 传 <see cref="MonitorInfoEx"/>（cbSize=104）即可拿到带设备名的结构体，不能写成 GetMonitorInfoExW。
+    /// </summary>
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetMonitorInfoEx(nint monitor, ref MonitorInfoEx info);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool EnumDisplayMonitors(nint hdc, nint clipRect, MonitorEnumProc callback, nint data);
+
     [DllImport("user32.dll")]
     internal static extern uint GetDpiForWindow(nint hwnd);
+
+    /// <summary>取某台显示器的有效 DPI。返回 HRESULT，0 表示成功。</summary>
+    [DllImport("shcore.dll")]
+    internal static extern int GetDpiForMonitor(nint monitor, int dpiType, out uint dpiX, out uint dpiY);
 
     internal static string ClassNameOf(nint hwnd)
     {
