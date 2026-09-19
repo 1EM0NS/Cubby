@@ -1,0 +1,63 @@
+# AGENTS.md
+
+给 AI 协作者与新接手者的须知。**动手前先读这里。**
+
+## 项目是什么
+
+**Cubby** —— Windows 桌面整理助手。核心差异化：**只借用盒子区域内的点击，其余鼠标消息原封不动下发**，因此与 Wallpaper Engine 等动态壁纸零冲突（现有同类工具的通病就是抢输入，导致互动壁纸点不动）。
+
+## 先读什么
+
+1. `技术方案.md` —— 设计原则、桌面图层模型、Win32 API 清单、验收标准 A1–A8、里程碑门禁
+2. `docs/工作日志.md` —— 已经做过什么、验证过什么、踩过哪些坑（最新在最上）
+3. GitHub 上的 open issues 与里程碑 M0–M3
+
+## 不可违反的四条（P1–P4）
+
+| 编号 | 约束 | 理由 |
+|---|---|---|
+| P1 | **不注册全局鼠标钩子**；万不得已时必须无条件 `CallNextHookEx` 放行，禁止返回非零值 | 不破坏依赖钩子链的第三方软件 |
+| P2 | 浮层只有盒子区域参与命中测试，其余区域必须点击穿透 | 这是本项目的立身之本 |
+| P3 | **不 `SetParent` 到 WorkerW**，用独立顶层窗口 + 事件驱动置底 | `SetParent` 后鼠标事件常失效，且会与壁纸软件争 Z 序 |
+| P4 | **文件实体永不移动**，只保存引用与展示位置 | 最坏只丢配置，不丢用户文件 |
+
+违反会被 CI 的 `tools/scripts/guard.ps1` 拦下。确有必要时，在调用行**前两行内**加 `// guard-exempt: <原因>`，并且**必须先补一篇 ADR** 再动代码。
+
+## 工作规矩
+
+1. **不直推 `main`**（有分支保护，直推会被拒），走短命分支 + PR。
+   分支前缀：`spike/`（机制验证，允许失败）、`feat/`、`fix/`、`test/`、`ci/`、`docs/`、`chore/`
+2. 提交信息用 Conventional Commits：`type(scope): 简述`，type 与 scope 用英文，正文可用中文
+3. 每个功能一个闭环：Issue → 分支 → 实现 → 本地跑回归清单 → PR（写清"怎么验证的 + 实际结果"）→ CI 绿 → 合并关 Issue
+4. **每次会话结束必须往 `docs/工作日志.md` 追加一条记录**（最新在最上），包含：目标、做了什么、验证与证据、遗留与下一步。**禁止修改历史条目。**
+5. 跨过里程碑门禁才打 tag：M0 → `0.1.0`，M1 → `0.2.0`，M2 → `0.3.0`，M3 → `1.0.0`
+
+## 环境注意事项（都是踩过的坑）
+
+- **代理**：本仓库 `.git/config` 已把 `http.proxy` / `https.proxy` 置空，用于覆盖全局那个失效的 `127.0.0.1:7890`。若某天需要走代理，用 `git -c http.proxy=127.0.0.1:端口 push` 临时指定，**不要去改全局配置**。
+- **推送用 `gh`**：已登录账号 `1EM0NS`，token 含 `repo` 与 `workflow` 权限。
+- **PowerShell 5.1 三个坑**：
+  1. 空字符串参数会被丢弃（`git config --local http.proxy ""` 实际不写入，且 `--get` 返回空会造成"已生效"的假象）
+  2. 参数模式下 `-f title=$m.Title` 不做成员访问，会提交字面量 `System.Collections.Hashtable.Title`；描述里的 ASCII 双引号会破坏参数解析
+  3. 读无 BOM 的 UTF-8 脚本会按 ANSI 解析，中文直接报语法错误
+  → **结论：给 `gh` 传中文内容一律用 `--body-file` 传文件；`.ps1` 存盘时带 BOM。**
+- 本机没装 `pwsh`（PowerShell 7），CI 的 `windows-latest` 上有。
+
+## 常用命令
+
+```powershell
+# 本地跑设计原则守卫（本机用 powershell 5.1）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\scripts\guard.ps1
+
+# 开分支、提交、推
+git switch -c spike/alpha-hit-test
+git add -A; git commit -m "feat(overlay): ..."; git push -u origin HEAD
+
+# 提 PR、看 CI、合并
+gh pr create --fill
+gh run list --repo 1EM0NS/Cubby --limit 5
+gh pr merge --squash --delete-branch
+
+# 查看待办
+gh issue list --repo 1EM0NS/Cubby --limit 30
+```
