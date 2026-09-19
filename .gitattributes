@@ -1,0 +1,30 @@
+# 默认统一为 LF，保证跨平台 diff 干净
+* text=auto eol=lf
+
+# Windows 工具链需要的 CRLF
+*.sln text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.targets text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.cur binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.7z binary
+*.exe binary
+*.dll binary
+*.pdb binary
+
+# 语言标记
+*.cs diff=csharp
+*.md text

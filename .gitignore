@@ -1,0 +1,43 @@
+# 构建产物
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+artifacts/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# 包与还原
+packages/
+*.nupkg
+*.snupkg
+
+# 测试与覆盖率
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# 运行期产物
+*.log
+logs/
+%AppData%/Cubby/
+
+# 本地临时文件
+*.tmp
+*.bak
+Thumbs.db
+desktop.ini

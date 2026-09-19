@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build-and-test
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设计原则守卫（P1-P4）
+        shell: pwsh
+        run: ./tools/scripts/guard.ps1
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 构建与测试
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'Cubby.sln')) {
+            Write-Host '::notice::尚无解决方案文件，跳过构建（M1 起生效）'
+            exit 0
+          }
+          dotnet build Cubby.sln --configuration Release --nologo
+          dotnet test Cubby.sln --configuration Release --no-build --nologo

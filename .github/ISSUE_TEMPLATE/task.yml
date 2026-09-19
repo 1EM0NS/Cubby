@@ -1,0 +1,54 @@
+name: 任务
+description: 一个可独立验收的开发任务
+title: "[M0] "
+labels: ["task"]
+body:
+  - type: input
+    id: milestone
+    attributes:
+      label: 所属里程碑
+      placeholder: M0 机制验证 / M1 骨架可用 / M2 一期功能 / M3 发布就绪
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标与背景
+      description: 要解决什么问题，为什么现在做
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 必须可测量。引用 技术方案.md 第 9.1 节的编号（A1–A8）
+      placeholder: |
+        - [ ] A1：开启前后 WE 互动壁纸点击行为一致
+        - [ ] 浮层在 150% DPI 下位置正确
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: 实现要点
+    validations:
+      required: false
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: 风险与降级策略
+      description: 触碰 P1–P4 的改动必须先有 ADR
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: principle
+    attributes:
+      label: 设计原则自查
+      options:
+        - label: 本任务不违反 P1–P4（若违反，需先补 ADR 并在 PR 中说明）
+          required: true
