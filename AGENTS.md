@@ -56,14 +56,32 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\scripts\guard.ps1
 
 # 开分支、提交、推
-git switch -c spike/alpha-hit-test
-git add -A; git commit -m "feat(overlay): ..."; git push -u origin HEAD
+git switch -c feat/xxx
+git add -A; git commit -m "feat(scope): ..."; git push -u origin HEAD
 
 # 提 PR、看 CI、合并
-gh pr create --fill
+gh pr create --body-file <文件>      # 中文正文一律用文件，见上文编码坑
 gh run list --repo 1EM0NS/Cubby --limit 5
 gh pr merge --squash --delete-branch
 
 # 查看待办
 gh issue list --repo 1EM0NS/Cubby --limit 30
+```
+
+### Cubby 自带的自动化验收（报告都写到 `artifacts/`）
+
+```powershell
+$app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
+
+& $app --selftest              # 命中测试：盒子内拦截、盒子外穿透（写 hittest-summary.md）
+& $app --selftest-interact     # 盒子交互：拖动 / 缩放 / 折叠 / 锁定（写 interaction-report.md）
+& $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
+& $app --dump-state            # 运行状态：盒子渲染数量、命中区域、Win32/WPF 鼠标计数（写 state.txt）
+& $app                         # 无参 = 交互式诊断面板
+
+# 窗口链置底断言（A4）
+.\tools\ZOrderProbe\bin\Release\net8.0-windows\ZOrderProbe.exe --assert-behind --exe Cubby.App --title "Cubby 浮层"
+
+# 鼠标钩子链基线对比（A1/A3）：先在 Cubby 未运行时采集基线
+.\tools\HookProbe\bin\Release\net8.0-windows\HookProbe.exe --out artifacts\hookprobe-baseline.json
 ```

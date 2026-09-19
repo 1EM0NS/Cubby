@@ -13,13 +13,15 @@ namespace Cubby.App;
 public partial class HudWindow : Window
 {
     private readonly OverlayManager _manager;
+    private readonly LayoutService _layout;
     private readonly DispatcherTimer _timer;
     private HitMode _mode = HitMode.PerPixelAlpha;
 
-    internal HudWindow(OverlayManager manager)
+    internal HudWindow(OverlayManager manager, LayoutService layout)
     {
         InitializeComponent();
         _manager = manager;
+        _layout = layout;
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -44,6 +46,36 @@ public partial class HudWindow : Window
         builder.AppendLine(_manager.DescribeMonitors());
         builder.AppendLine($"浮层窗口数：{_manager.Windows.Count}");
         builder.AppendLine($"重建次数：{_manager.RebuildCount}    最近一次：{_manager.LastRebuildReason} @ {_manager.LastRebuildAt ?? "(无)"}");
+        builder.AppendLine();
+
+        builder.AppendLine("== 布局 ==");
+        builder.AppendLine($"文件       : {_layout.FilePath}");
+        builder.AppendLine($"盒子总数   : {_layout.Boxes.Count}");
+        builder.AppendLine(
+            $"保存次数   : {_layout.SaveCount}    最近保存：{_layout.LastSaveAt ?? "(尚未保存)"}" +
+            $"{(_layout.HasPendingSave ? "    [待写入]" : string.Empty)}");
+        builder.AppendLine(
+            $"样式       : 透明度 {_layout.Style.Opacity:0.##} / 圆角 {_layout.Style.CornerRadius:0} / " +
+            $"列数 {_layout.Style.Columns} / 字号 {_layout.Style.FontSize:0}");
+        if (_layout.LoadDiagnostic is { } diagnostic)
+        {
+            builder.AppendLine($"载入诊断   : {diagnostic}");
+        }
+
+        if (_manager.LastOpenError is { } openError)
+        {
+            builder.AppendLine($"打开失败   : {openError}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("== 盒子 ==");
+        foreach (var box in _layout.Boxes)
+        {
+            builder.AppendLine(
+                $"  {box.Name,-14} ({box.Bounds.X:0},{box.Bounds.Y:0}) {box.Bounds.Width:0}×{box.Bounds.Height:0}  " +
+                $"锁定={box.IsLocked} 折叠={box.IsCollapsed} 条目={box.Items.Count}");
+        }
+
         builder.AppendLine();
 
         if (overlay?.Host is null || overlay.Surface is null)
@@ -150,7 +182,7 @@ public partial class HudWindow : Window
 
         try
         {
-            var code = await SelfTestRunner.RunAsync(overlay, new SpikeOptions(true, null, false));
+            var code = await SelfTestRunner.RunAsync(overlay, new SpikeOptions(true, null, false, false, false));
             StatusText.Text = code == 0
                 ? "自测通过（exit 0），报告已写入 artifacts/"
                 : $"自测未通过（exit {code}），请看 artifacts/ 下的报告";

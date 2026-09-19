@@ -33,15 +33,21 @@ public partial class App : Application
             return;
         }
 
-        var manager = new OverlayManager();
+        var layoutPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Cubby",
+            "layout.json");
+
+        var layout = new LayoutService(layoutPath);
+        var manager = new OverlayManager(layout);
         manager.Start();
 
-        if (options.SelfTest)
+        if (options.SelfTest || options.Interact)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
             {
-                Console.Error.WriteLine("没有可用的浮层窗口，自测无法进行。");
+                Console.Error.WriteLine("没有可用的浮层窗口，自动化验收无法进行。");
                 Shutdown(2);
                 return;
             }
@@ -55,14 +61,35 @@ public partial class App : Application
                 }
 
                 started = true;
-                var exitCode = await SelfTestRunner.RunAsync(overlay, options);
+                var exitCode = options.SelfTest
+                    ? await SelfTestRunner.RunAsync(overlay, options)
+                    : await InteractionTestRunner.RunAsync(overlay, layout, options);
+
                 Shutdown(exitCode);
             };
 
             return;
         }
 
-        new HudWindow(manager).Show();
+        if (options.DumpState)
+        {
+            // 等窗口初始化与首帧渲染完成再取样，否则读到的是"还没画出来"的中间态
+            Dispatcher.InvokeAsync(
+                async () =>
+                {
+                    await Task.Delay(1500);
+
+                    var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
+                    var path = StateReport.Write(manager, layout, Path.Combine(directory, "state.txt"));
+                    Console.WriteLine($"状态报告已写入：{path}");
+                    Shutdown(0);
+                },
+                System.Windows.Threading.DispatcherPriority.Background);
+
+            return;
+        }
+
+        new HudWindow(manager, layout).Show();
     }
 
     /// <summary>把未处理异常写到 artifacts/crash.log（M3 做正式崩溃日志时会统一搬到 %AppData%）。</summary>
@@ -86,12 +113,14 @@ public partial class App : Application
 }
 
 /// <summary>命令行参数。</summary>
-internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors)
+internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
         OutputDirectory: ValueOf(args, "--out"),
-        DumpMonitors: Has(args, "--dump-monitors"));
+        DumpMonitors: Has(args, "--dump-monitors"),
+        DumpState: Has(args, "--dump-state"),
+        Interact: Has(args, "--selftest-interact"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

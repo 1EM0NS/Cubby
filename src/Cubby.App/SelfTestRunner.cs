@@ -29,7 +29,7 @@ internal static class SelfTestRunner
         "与进程归属无关，因此该结论对第三方窗口同样成立；但真正与 Wallpaper Engine 互动壁纸的端到端表现，" +
         "仍需按诊断面板中的步骤人工确认（那部分无法自动化）。";
 
-    public static async Task<int> RunAsync(SpikeWindow overlay, SpikeOptions options)
+    public static async Task<int> RunAsync(OverlayWindow overlay, SpikeOptions options)
     {
         await Task.Delay(SettleDelay);
 
@@ -86,7 +86,7 @@ internal static class SelfTestRunner
         return reports.Count > 0 && reports.All(r => r.Passed) ? 0 : 1;
     }
 
-    private static async Task<HitTestReport> ProbeAsync(SpikeWindow overlay, ProbeBackdropWindow backdrop, HitMode mode)
+    private static async Task<HitTestReport> ProbeAsync(OverlayWindow overlay, ProbeBackdropWindow backdrop, HitMode mode)
     {
         var host = overlay.Host!;
         var overlayHwnd = host.Handle;
