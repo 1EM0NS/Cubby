@@ -4,90 +4,115 @@
              AllowDrop="True"
              DragOver="OnDragOver"
              Drop="OnDrop">
+    <!--
+        设计约束（P2）：盒子的所有绘制都必须落在盒子矩形内部。
+        这里刻意不使用任何 Effect（阴影 / 模糊都会向外扩散成 alpha>0 的像素，从而抢走盒子外的点击）。
+        立体感一律用「渐变底 + 顶部高光 + 左侧强调条 + 描边」实现。
+    -->
     <Grid>
-        <Border x:Name="Root"
-                BorderThickness="2">
-            <DockPanel>
+        <Border x:Name="Root" BorderThickness="1">
+            <Grid>
+                <!-- 左侧强调条：颜色随状态变化（正常强调绿 / 锁定黄 / 映射青） -->
+                <Border x:Name="AccentBar"
+                        Width="3"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Stretch"
+                        CornerRadius="2"
+                        Margin="0,10,0,10"
+                        Background="{StaticResource Cubby.Brush.Accent}" />
 
-                <Border x:Name="TitleBar"
-                        DockPanel.Dock="Top"
-                        Height="34"
-                        CornerRadius="10,10,0,0"
-                        Background="#33000000"
-                        MouseLeftButtonDown="OnTitleMouseDown"
-                        MouseMove="OnTitleMouseMove"
-                        MouseLeftButtonUp="OnTitleMouseUp">
-                    <Grid>
-                        <TextBlock x:Name="TitleText"
-                                   Margin="10,0,0,0"
-                                   VerticalAlignment="Center"
-                                   FontWeight="Medium"
-                                   TextTrimming="CharacterEllipsis" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <Button x:Name="DesktopIconButton"
-                                    Width="28"
-                                    Height="24"
-                                    Margin="0,0,4,0"
-                                    Padding="0"
-                                    FontSize="12"
-                                    ToolTip="隐藏 / 显示真实桌面图标（也可以用全局热键）"
-                                    Content="👁"
-                                    Click="OnToggleDesktopIcons" />
-                            <Button x:Name="SearchButton"
-                                    Width="28"
-                                    Height="24"
-                                    Margin="0,0,4,0"
-                                    Padding="0"
-                                    FontSize="12"
-                                    ToolTip="搜索这个盒子里的条目"
-                                    Content="🔍"
-                                    Click="OnSearch" />
-                            <Button x:Name="LockButton"
-                                    Width="28"
-                                    Height="24"
-                                    Margin="0,0,4,0"
-                                    Padding="0"
-                                    FontSize="12"
-                                    ToolTip="锁定后不能拖动与缩放"
-                                    Click="OnToggleLock" />
-                            <Button x:Name="CollapseButton"
-                                    Width="28"
-                                    Height="24"
-                                    Margin="0,0,8,0"
-                                    Padding="0"
-                                    FontSize="12"
-                                    ToolTip="折叠 / 展开"
-                                    Click="OnToggleCollapse" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                <DockPanel>
 
-                <ScrollViewer x:Name="ItemArea" VerticalScrollBarVisibility="Auto" Padding="8">
-                    <ItemsControl x:Name="ItemsHost">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel x:Name="ItemsPanelHost" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </ScrollViewer>
+                    <Border x:Name="TitleBar"
+                            DockPanel.Dock="Top"
+                            Height="34"
+                            Background="Transparent"
+                            MouseLeftButtonDown="OnTitleMouseDown"
+                            MouseMove="OnTitleMouseMove"
+                            MouseLeftButtonUp="OnTitleMouseUp">
+                        <Grid>
+                            <!-- 顶部高光：一条 1px 的白色渐隐线，营造"玻璃边缘" -->
+                            <Border Height="1" VerticalAlignment="Top" Margin="12,0,12,0" Opacity="0.4">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Offset="0" Color="#00FFFFFF" />
+                                        <GradientStop Offset="0.5" Color="#66FFFFFF" />
+                                        <GradientStop Offset="1" Color="#00FFFFFF" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
 
-            </DockPanel>
+                            <TextBlock x:Name="TitleIcon"
+                                       Margin="14,0,0,0"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       FontFamily="{StaticResource Cubby.Font.Icon}"
+                                       FontSize="11"
+                                       Visibility="Collapsed" />
+
+                            <TextBlock x:Name="TitleText"
+                                       Margin="14,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button x:Name="DesktopIconButton"
+                                        Style="{StaticResource Cubby.Button.Icon}"
+                                        Margin="0,0,2,0"
+                                        ToolTip="隐藏 / 显示真实桌面图标（Ctrl+Alt+H）"
+                                        Click="OnToggleDesktopIcons" />
+                                <Button x:Name="SearchButton"
+                                        Style="{StaticResource Cubby.Button.Icon}"
+                                        Margin="0,0,2,0"
+                                        ToolTip="搜索这个盒子里的条目"
+                                        Click="OnSearch" />
+                                <Button x:Name="LockButton"
+                                        Style="{StaticResource Cubby.Button.Icon}"
+                                        Margin="0,0,2,0"
+                                        ToolTip="锁定后不能拖动与缩放"
+                                        Click="OnToggleLock" />
+                                <Button x:Name="CollapseButton"
+                                        Style="{StaticResource Cubby.Button.Icon}"
+                                        Margin="0,0,10,0"
+                                        ToolTip="折叠 / 展开"
+                                        Click="OnToggleCollapse" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer x:Name="ItemArea"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="10,4,6,8">
+                        <ItemsControl x:Name="ItemsHost">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel x:Name="ItemsPanelHost" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                </DockPanel>
+            </Grid>
         </Border>
 
-        <!-- 右下角缩放手柄 -->
-        <Rectangle x:Name="ResizeGrip"
-                   Width="16"
-                   Height="16"
-                   HorizontalAlignment="Right"
-                   VerticalAlignment="Bottom"
-                   RadiusX="3"
-                   RadiusY="3"
-                   Fill="#660FDC78"
-                   Cursor="SizeNWSE"
-                   ToolTip="拖动调整盒子大小"
-                   MouseLeftButtonDown="OnGripMouseDown"
-                   MouseMove="OnGripMouseMove"
-                   MouseLeftButtonUp="OnGripMouseUp" />
+        <!-- 右下角缩放手柄：透明底保证 16×16 都能抓到，上面两道斜角短线比实心方块克制 -->
+        <Canvas x:Name="ResizeGrip"
+                Width="16"
+                Height="16"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,3,3"
+                Cursor="SizeNWSE"
+                ToolTip="拖动调整盒子大小"
+                MouseLeftButtonDown="OnGripMouseDown"
+                MouseMove="OnGripMouseMove"
+                MouseLeftButtonUp="OnGripMouseUp">
+            <Rectangle Width="16" Height="16" Fill="Transparent" />
+            <Line X1="11" Y1="15" X2="15" Y2="11" Stroke="#B3FFFFFF" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+            <Line X1="5" Y1="15" X2="15" Y2="5" Stroke="#66FFFFFF" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+            <Line X1="1" Y1="15" X2="15" Y2="1" Stroke="#33FFFFFF" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+        </Canvas>
     </Grid>
 </UserControl>

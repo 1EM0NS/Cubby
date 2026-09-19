@@ -80,7 +80,7 @@ public partial class App : Application
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map || options.Search || options.Rules || options.DesktopIcons)
+        if (options.IsAutomated)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -99,27 +99,24 @@ public partial class App : Application
                 }
 
                 started = true;
-                var exitCode = options.SelfTest
-                    ? await SelfTestRunner.RunAsync(overlay, options)
-                    : options.Interact
-                        ? await InteractionTestRunner.RunAsync(overlay, layout, options)
-                        : options.Drop
-                            ? await DropTestRunner.RunAsync(overlay, layout, options)
-                            : options.Menu
-                                ? await ItemMenuTestRunner.RunAsync(overlay, layout, options)
-                                : options.Shell
-                                    ? await ShellTestRunner.RunAsync(manager, layout, options)
-                                    : options.Adopt
-                                        ? await AdoptTestRunner.RunAsync(overlay, layout, options)
-                                        : options.Snapshot
-                                            ? await SnapshotTestRunner.RunAsync(manager, layout, options)
-                                            : options.Map
-                                                ? await MapTestRunner.RunAsync(overlay, layout, manager, options)
-                                                : options.Search
-                                                    ? await SearchTestRunner.RunAsync(overlay, layout, manager, options)
-                                                    : options.Rules
-                                                        ? await RuleTestRunner.RunAsync(overlay, layout, manager, options)
-                                                        : await DesktopIconTestRunner.RunAsync(overlay, layout, manager, options);
+
+                // 每个验收都是「一整条用户路径」，因此这里只做分发，不放任何业务逻辑
+                var exitCode = options switch
+                {
+                    { SelfTest: true } => await SelfTestRunner.RunAsync(overlay, options),
+                    { Interact: true } => await InteractionTestRunner.RunAsync(overlay, layout, options),
+                    { Drop: true } => await DropTestRunner.RunAsync(overlay, layout, options),
+                    { Menu: true } => await ItemMenuTestRunner.RunAsync(overlay, layout, options),
+                    { Shell: true } => await ShellTestRunner.RunAsync(manager, layout, options),
+                    { Adopt: true } => await AdoptTestRunner.RunAsync(overlay, layout, options),
+                    { Snapshot: true } => await SnapshotTestRunner.RunAsync(manager, layout, options),
+                    { Map: true } => await MapTestRunner.RunAsync(overlay, layout, manager, options),
+                    { Search: true } => await SearchTestRunner.RunAsync(overlay, layout, manager, options),
+                    { Rules: true } => await RuleTestRunner.RunAsync(overlay, layout, manager, options),
+                    { DesktopIcons: true } => await DesktopIconTestRunner.RunAsync(overlay, layout, manager, options),
+                    { Appearance: true } => await AppearanceTestRunner.RunAsync(overlay, layout, options),
+                    _ => 0,
+                };
 
                 Shutdown(exitCode);
             };
@@ -278,8 +275,13 @@ internal sealed record SpikeOptions(
     bool Map = false,
     bool Search = false,
     bool Rules = false,
-    bool DesktopIcons = false)
+    bool DesktopIcons = false,
+    bool Appearance = false)
 {
+    /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
+    public bool IsAutomated =>
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance;
+
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
         OutputDirectory: ValueOf(args, "--out"),
@@ -297,7 +299,8 @@ internal sealed record SpikeOptions(
         Map: Has(args, "--selftest-map"),
         Search: Has(args, "--selftest-search"),
         Rules: Has(args, "--selftest-rules"),
-        DesktopIcons: Has(args, "--selftest-desktop-icons"));
+        DesktopIcons: Has(args, "--selftest-desktop-icons"),
+        Appearance: Has(args, "--selftest-appearance"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

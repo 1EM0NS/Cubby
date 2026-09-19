@@ -2,29 +2,30 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Cubby · 归类规则"
-        Width="720"
-        Height="620"
+        Width="760"
+        Height="640"
+        Style="{StaticResource Cubby.Window}"
         WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="16">
+    <DockPanel Margin="20">
 
         <StackPanel DockPanel.Dock="Top">
-            <TextBlock Text="自动归类规则" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="自动归类规则" Style="{StaticResource Cubby.H1}" />
             <TextBlock Margin="0,6,0,4"
-                       TextWrapping="Wrap"
-                       Foreground="#52525B"
+                       Style="{StaticResource Cubby.Caption}"
                        Text="规则写在 rules.json 里（可手改、可导入导出）。归类只决定条目展示在哪个盒子，Cubby 不会移动、复制或删除任何文件。" />
-            <TextBlock x:Name="PathText" FontFamily="Consolas" FontSize="11" Foreground="#71717A" TextWrapping="Wrap" />
+            <TextBlock x:Name="PathText" FontFamily="{StaticResource Cubby.Font.Mono}" FontSize="11"
+                       Foreground="{StaticResource Cubby.Brush.TextDim}" TextWrapping="Wrap" />
         </StackPanel>
 
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-            <UniformGrid Columns="5" Margin="0,0,0,8">
-                <Button Content="预览" Margin="0,0,4,0" Padding="8" Click="OnPreview" />
-                <Button x:Name="ApplyButton" Content="应用到桌面条目" Margin="4,0,4,0" Padding="8" Click="OnApply" />
-                <Button x:Name="UndoButton" Content="撤销上次归类" Margin="4,0,4,0" Padding="8" Click="OnUndo" />
-                <Button Content="重新加载" Margin="4,0,4,0" Padding="8" Click="OnReload" />
-                <Button Content="打开文件" Margin="4,0,0,0" Padding="8" Click="OnOpenFile" />
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+            <UniformGrid Columns="5" Margin="0,0,0,10">
+                <Button Style="{StaticResource Cubby.Button.Primary}" Content="预览" Margin="0,0,5,0" Padding="8" Click="OnPreview" />
+                <Button x:Name="ApplyButton" Content="应用到桌面条目" Margin="5,0,5,0" Padding="8" Click="OnApply" />
+                <Button x:Name="UndoButton" Content="撤销上次归类" Margin="5,0,5,0" Padding="8" Click="OnUndo" />
+                <Button Content="重新加载" Margin="5,0,5,0" Padding="8" Click="OnReload" />
+                <Button Content="打开文件" Margin="5,0,0,0" Padding="8" Click="OnOpenFile" />
             </UniformGrid>
-            <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="#02743B" />
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{StaticResource Cubby.Brush.Ok}" />
         </StackPanel>
 
         <Grid>
@@ -35,15 +36,15 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Text="规则" FontWeight="SemiBold" Margin="0,10,0,4" />
-            <Border Grid.Row="1" BorderBrush="#E4E4E7" BorderThickness="1" CornerRadius="8" Padding="4">
-                <ListBox x:Name="RuleList" BorderThickness="0" FontFamily="Consolas" FontSize="12" />
+            <TextBlock Grid.Row="0" Text="规则" Style="{StaticResource Cubby.Section}" />
+            <Border Grid.Row="1" Style="{StaticResource Cubby.Card}" Padding="4">
+                <ListBox x:Name="RuleList" FontFamily="{StaticResource Cubby.Font.Mono}" FontSize="12" />
             </Border>
 
-            <TextBlock Grid.Row="2" Text="预览 / 结果" FontWeight="SemiBold" Margin="0,10,0,4" />
-            <Border Grid.Row="3" BorderBrush="#E4E4E7" BorderThickness="1" CornerRadius="8" Padding="8">
+            <TextBlock Grid.Row="2" Text="预览 / 结果" Style="{StaticResource Cubby.Section}" />
+            <Border Grid.Row="3" Style="{StaticResource Cubby.Card}" Padding="10">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="PlanText" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PlanText" FontFamily="{StaticResource Cubby.Font.Mono}" FontSize="12" TextWrapping="Wrap" />
                 </ScrollViewer>
             </Border>
         </Grid>
