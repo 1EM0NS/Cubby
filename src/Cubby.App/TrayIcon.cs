@@ -31,6 +31,9 @@ internal sealed class TrayIcon : IDisposable
         var settings = new ToolStripMenuItem("设置…");
         settings.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
+        var snapshots = new ToolStripMenuItem("布局快照…");
+        snapshots.Click += (_, _) => SnapshotsRequested?.Invoke(this, EventArgs.Empty);
+
         var exit = new ToolStripMenuItem("退出");
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
@@ -39,6 +42,7 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add(_desktopIconsItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
+        menu.Items.Add(snapshots);
         menu.Items.Add(settings);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exit);
@@ -61,6 +65,8 @@ internal sealed class TrayIcon : IDisposable
     public event EventHandler<bool>? AutoStartRequested;
 
     public event EventHandler? SettingsRequested;
+
+    public event EventHandler? SnapshotsRequested;
 
     public event EventHandler? ExitRequested;
 

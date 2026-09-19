@@ -21,4 +21,10 @@ public sealed record LayoutDocument
 
     /// <summary>上次保存时间（ISO 8601），仅用于诊断。</summary>
     public string? SavedAt { get; init; }
+
+    /// <summary>快照保留份数（0 表示不自动清理）。重新加载布局时由 <see cref="Storage.LayoutStore"/> 读回。</summary>
+    public int SnapshotKeep { get; init; } = 10;
+
+    /// <summary>仅快照文件会写入：创建这份快照时用户给的标签。</summary>
+    public string? SnapshotLabel { get; init; }
 }

@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Cubby.Core.Model;
 
 namespace Cubby.Core.Storage;
@@ -14,13 +13,6 @@ namespace Cubby.Core.Storage;
 /// </summary>
 public sealed class LayoutStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     public LayoutStore(string filePath) => FilePath = filePath;
 
     public string FilePath { get; }
@@ -40,20 +32,12 @@ public sealed class LayoutStore
         try
         {
             var json = File.ReadAllText(FilePath, Encoding.UTF8);
-            var document = JsonSerializer.Deserialize<LayoutDocument>(json, SerializerOptions)
+            var document = LayoutSerialization.Deserialize(json)
                 ?? throw new InvalidDataException("反序列化结果为空");
 
-            if (document.SchemaVersion > LayoutSchema.CurrentVersion)
+            if (LayoutSerialization.ValidateVersion(document) is { } problem)
             {
-                throw new NotSupportedException(
-                    $"布局文件版本为 {document.SchemaVersion}，高于本程序支持的 {LayoutSchema.CurrentVersion}");
-            }
-
-            if (document.SchemaVersion < LayoutSchema.CurrentVersion)
-            {
-                // 目前只有 v1；将来新增版本时在这里补迁移链，并补对应单元测试
-                throw new NotSupportedException(
-                    $"暂不支持从布局版本 {document.SchemaVersion} 迁移");
+                throw new NotSupportedException(problem);
             }
 
             return document;
@@ -75,7 +59,7 @@ public sealed class LayoutStore
         }
 
         var payload = document with { SavedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
-        var json = JsonSerializer.Serialize(payload, SerializerOptions);
+        var json = LayoutSerialization.Serialize(payload);
 
         var temporary = FilePath + ".tmp";
         File.WriteAllText(temporary, json, new UTF8Encoding(false));
