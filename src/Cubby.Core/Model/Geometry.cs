@@ -26,6 +26,7 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
 }
 
 /// <summary>一个显示器上的浮层矩形范围与 DPI 缩放。</summary>
+/// <param name="Id">显示器标识。M1 起使用系统设备名（如 \\.\DISPLAY1），spike 阶段是 "primary"。</param>
 public sealed record MonitorSurface(string Id, PixelRect Bounds, double DpiScale)
 {
     /// <summary>把该显示器上的 DIP 矩形换算为虚拟屏幕物理像素矩形。</summary>
@@ -34,7 +35,11 @@ public sealed record MonitorSurface(string Id, PixelRect Bounds, double DpiScale
         Bounds.Top + (int)Math.Round(dip.Y * DpiScale),
         Bounds.Left + (int)Math.Round(dip.Right * DpiScale),
         Bounds.Top + (int)Math.Round(dip.Bottom * DpiScale));
-}
 
-/// <summary>盒子。spike 阶段只保留命中测试所需字段，后续再扩展条目列表等。</summary>
-public sealed record Box(string Id, string Name, DipRect Bounds);
+    /// <summary>把虚拟屏幕物理像素换算回该显示器上的 DIP 坐标。</summary>
+    public DipRect ToDip(PixelRect physical) => new(
+        (physical.Left - Bounds.Left) / DpiScale,
+        (physical.Top - Bounds.Top) / DpiScale,
+        physical.Width / DpiScale,
+        physical.Height / DpiScale);
+}
