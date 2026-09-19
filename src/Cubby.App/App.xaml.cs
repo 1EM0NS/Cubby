@@ -76,6 +76,16 @@ public partial class App : Application
         _lastDesktopIconRecovery = DesktopIconController.RecoverIfLeftHidden();
 
         var layout = new LayoutService(layoutPath);
+
+        if (options.ResetOnboarding)
+        {
+            // 换机 / 演示前重放引导。刻意放在创建浮层之前：只改一次配置就退出，不碰任何系统状态。
+            OnboardingNotice.Reset(layout);
+            Console.WriteLine($"已重置首次运行引导（OnboardingShown=false）：{layout.FilePath}");
+            Shutdown(0);
+            return;
+        }
+
         var manager = new OverlayManager(layout);
         _manager = manager;
         manager.Start();
@@ -116,6 +126,7 @@ public partial class App : Application
                     { DesktopIcons: true } => await DesktopIconTestRunner.RunAsync(overlay, layout, manager, options),
                     { Appearance: true } => await AppearanceTestRunner.RunAsync(overlay, layout, options),
                     { Coexist: true } => await CoexistTestRunner.RunAsync(layout, options),
+                    { Onboard: true } => await OnboardingTestRunner.RunAsync(manager, layout, options),
                     _ => 0,
                 };
 
@@ -148,6 +159,10 @@ public partial class App : Application
         // A8：与同类桌面整理软件共存。**只提示、不抢占**；检测只在启动时做一次，不轮询。
         // 放在托盘之后：这样即使用户直接关掉提示，程序也已经在正常常驻了。
         CoexistNotice.ShowIfNeeded(layout);
+
+        // #38 首次运行引导。放在共存提示**之后**：两个窗口同时出现时，欢迎窗排在更上面，
+        // 新用户第一眼看到的是「怎么用」而不是「你和谁冲突」。只在没记过标记时才弹，否则完全静默。
+        OnboardingNotice.ShowIfNeeded(manager, layout);
 
         if (options.Diagnostics)
         {
@@ -198,8 +213,16 @@ public partial class App : Application
         tray.SettingsRequested += (_, _) => ShowSettings(manager, layout);
         tray.SnapshotsRequested += (_, _) => ShowSnapshots(manager, layout);
         tray.RulesRequested += (_, _) => ShowRules(manager);
+        tray.GuideRequested += (_, _) => ShowOnboarding(manager, layout);
         tray.ExitRequested += (_, _) => Shutdown();
     }
+
+    /// <summary>
+    /// 托盘菜单「使用指引…」：无视「不再自动显示」，用户主动点进来就给他看。
+    /// 与启动时的自动弹出经同一条 <see cref="OnboardingNotice.Show"/>，不会出现两条不一致的路径。
+    /// </summary>
+    private void ShowOnboarding(OverlayManager manager, LayoutService layout) =>
+        OnboardingNotice.Show(manager, layout);
 
     private void ShowSettings(OverlayManager manager, LayoutService layout)
     {
@@ -282,11 +305,13 @@ internal sealed record SpikeOptions(
     bool Rules = false,
     bool DesktopIcons = false,
     bool Appearance = false,
-    bool Coexist = false)
+    bool Coexist = false,
+    bool Onboard = false,
+    bool ResetOnboarding = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
-        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist;
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard;
 
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -307,7 +332,9 @@ internal sealed record SpikeOptions(
         Rules: Has(args, "--selftest-rules"),
         DesktopIcons: Has(args, "--selftest-desktop-icons"),
         Appearance: Has(args, "--selftest-appearance"),
-        Coexist: Has(args, "--selftest-coexist"));
+        Coexist: Has(args, "--selftest-coexist"),
+        Onboard: Has(args, "--selftest-onboard"),
+        ResetOnboarding: Has(args, "--reset-onboarding"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

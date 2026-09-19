@@ -1,0 +1,88 @@
+<Window x:Class="Cubby.App.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cubby · 欢迎使用"
+        Width="680"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        Style="{StaticResource Cubby.Window}"
+        WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="24">
+
+        <StackPanel Orientation="Horizontal">
+            <Border Width="42"
+                    Height="42"
+                    CornerRadius="13"
+                    Background="{StaticResource Cubby.Brush.AccentDeep}"
+                    VerticalAlignment="Top">
+                <TextBlock Text="&#xE710;"
+                           FontFamily="{StaticResource Cubby.Font.Icon}"
+                           FontSize="18"
+                           Foreground="{StaticResource Cubby.Brush.Accent}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="欢迎使用 Cubby" Style="{StaticResource Cubby.H1}" />
+                <TextBlock Margin="0,5,0,0"
+                           Style="{StaticResource Cubby.Caption}"
+                           Text="盒子只借用盒子区域内的点击；盒子之外、桌面图标与动态壁纸的行为完全不变。" />
+            </StackPanel>
+        </StackPanel>
+
+        <Border Style="{StaticResource Cubby.Card}" Margin="0,18,0,0" Padding="16,12">
+            <ItemsControl x:Name="PointList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,7">
+                            <Border Width="28"
+                                    Height="28"
+                                    CornerRadius="8"
+                                    Background="{StaticResource Cubby.Brush.SurfaceAlt}"
+                                    VerticalAlignment="Top">
+                                <TextBlock Text="{Binding Glyph}"
+                                           FontFamily="{StaticResource Cubby.Font.Icon}"
+                                           FontSize="13"
+                                           Foreground="{StaticResource Cubby.Brush.Accent}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Margin="0,3,0,0"
+                                           Text="{Binding Detail}"
+                                           Style="{StaticResource Cubby.Caption}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <TextBlock x:Name="StatusText"
+                   Margin="0,12,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource Cubby.Brush.Accent}"
+                   Visibility="Collapsed" />
+
+        <CheckBox x:Name="RememberBox"
+                  Margin="0,14,0,0"
+                  IsChecked="True"
+                  Content="不再自动显示这个欢迎窗（随时可从托盘菜单「使用指引」再打开）" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button x:Name="CreateBoxButton"
+                    Margin="0,0,10,0"
+                    Padding="18,7"
+                    Content="创建第一个盒子"
+                    Click="OnCreateBox" />
+            <Button x:Name="StartButton"
+                    Style="{StaticResource Cubby.Button.Primary}"
+                    Padding="20,7"
+                    Content="开始使用"
+                    IsDefault="True"
+                    Click="OnStart" />
+        </StackPanel>
+    </StackPanel>
+</Window>

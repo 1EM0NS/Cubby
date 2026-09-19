@@ -68,6 +68,23 @@ gh pr merge --squash --delete-branch
 gh issue list --repo 1EM0NS/Cubby --limit 30
 ```
 
+### 跑验收前先确认桌面没被遮挡（`--selftest-desktop-icons` 会因此假红）
+
+`--selftest-desktop-icons` 会**拿真实桌面**做命中断言：在盒子标题栏上取一点，
+期望 `WindowFromPoint` 命中我们的浮层。而浮层按设计（A4/P3）**永远在应用窗口之下**，
+所以只要有任何应用窗口盖住那个点，点击就"正确地"属于那个窗口，断言必然失败——
+
+```
+隐藏状态下：盒子内仍归浮层、盒子外仍穿透 | **FAIL** | (2123,122) Chrome_RenderWidgetHostHWND 期望 浮层
+```
+
+**这是环境问题，不是回归。** 2026-09-20 实测过一次：把没改动的 `main`（71f3f46）拿去跑，
+失败点与探测结果一字不差；把盒子临时挪到未被遮挡的区域（或关掉/最小化遮挡窗口）后立刻 PASS。
+排查手法：`tools/ZOrderProbe/bin/Release/net8.0-windows/ZOrderProbe.exe --json`，
+看落点的窗口矩形归属（注意它输出的是 **DPI 虚拟化后的逻辑坐标**，物理坐标要乘 `DpiScale`）。
+
+`--selftest` 不受影响：它自造一个受控背景层并置顶，刻意绕开用户桌面状态。
+
 ### Cubby 自带的自动化验收（报告都写到 `artifacts/`）
 
 ```powershell
@@ -86,6 +103,8 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-desktop-icons # 桌面图标显隐：三个入口 + 崩溃兜底 + 系统矩阵（写 desktop-icons-report.md）
 & $app --selftest-appearance   # 视觉打磨：像素级 P2 断言（盒子外 alpha=0）+ 预览图（写 appearance-report.md / appearance-preview.png）
 & $app --selftest-coexist      # 同类软件共存（A8）：造真实同名进程，证明只提示不抢占（写 coexist-report.md）
+& $app --selftest-onboard      # 首次运行引导：出现 / 跳过 / 重置三条路径 + 托盘「使用指引」（写 onboard-report.md）
+& $app --reset-onboarding      # 重置引导标记，下次启动重新出现欢迎窗（换机、演示前重放用）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）

@@ -40,4 +40,13 @@ public sealed record LayoutDocument
     /// 而不会因为"提示过就不再提示"把新冲突咽掉。
     /// </summary>
     public IReadOnlyList<string> CoexistAcknowledgedTools { get; init; } = [];
+
+    /// <summary>
+    /// 首次运行引导（issue #38）是否已关掉自动弹出。true = 不再自动弹欢迎窗。
+    ///
+    /// 存在布局文档里是刻意的：**它跟着 layout.json 一起走**，用户删掉配置文件即天然等于重置；
+    /// 也可以在命令行用 <c>--reset-onboarding</c> 显式重置（换机、演示前重放引导都靠它）。
+    /// 这是个新增的可选字段，缺省 false，旧布局文件读进来不需要迁移。
+    /// </summary>
+    public bool OnboardingShown { get; init; }
 }

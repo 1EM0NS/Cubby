@@ -139,6 +139,54 @@ internal sealed class LayoutService
     /// <summary>用户已确认过的同类软件（A8）。</summary>
     public IReadOnlyList<string> CoexistAcknowledged => _document.CoexistAcknowledgedTools;
 
+    /// <summary>
+    /// 首次运行引导是否已关掉自动弹出（issue #38）。
+    /// 置 true 就记进 layout.json；用 <c>--reset-onboarding</c> 或删配置文件可重置。
+    /// </summary>
+    public bool OnboardingShown
+    {
+        get => _document.OnboardingShown;
+        set
+        {
+            if (_document.OnboardingShown == value)
+            {
+                return;
+            }
+
+            _document = _document with { OnboardingShown = value };
+            SaveNow();
+        }
+    }
+
+    /// <summary>
+    /// 在某台显示器上创建一个默认盒子（首次引导的「创建第一个盒子」走这里）。
+    ///
+    /// **幂等**：该显示器上已经有盒子就返回 null，不重复建——引导按钮被点两次也不会叠出一堆盒子。
+    /// 只改 Cubby 自己的布局文件，不碰磁盘上任何用户文件（P4）。
+    /// </summary>
+    public Box? CreateDefaultBox(MonitorSurface monitor)
+    {
+        if (_document.Boxes.Any(b => b.MonitorId == monitor.Id))
+        {
+            return null;
+        }
+
+        var style = Style;
+        var ordinal = _document.Boxes.Count + 1;
+        var box = new Box($"{monitor.Id}-{ordinal}", $"盒子 {ordinal}", new DipRect(60, 80, 420, 320))
+        {
+            MonitorId = monitor.Id,
+            MonitorWidth = monitor.Bounds.Width,
+            MonitorHeight = monitor.Bounds.Height,
+            Columns = style.Columns,
+            Opacity = style.Opacity,
+        };
+
+        _document = _document with { Boxes = [.. _document.Boxes, box] };
+        SaveNow();
+        return box;
+    }
+
     /// <summary>记住用户已经确认过这些同类软件，下次不再打扰。</summary>
     public void AcknowledgeCoexist(IEnumerable<string> processNames)
     {
