@@ -125,6 +125,22 @@ public sealed class FolderMapTests : IDisposable
     }
 
     [Fact]
+    public async Task 缓冲区溢出走强制重扫路径_会通知且不抛异常()
+    {
+        using var watcher = new MappedFolderWatcher(_root, TimeSpan.FromMilliseconds(80));
+        var notifications = 0;
+        watcher.Changed += (_, _) => Interlocked.Increment(ref notifications);
+
+        // 真实溢出要一瞬间灌进上千个事件，没法稳定复现；这里直接驱动事件处理器走的那条路径
+        watcher.RequestRescan("缓冲区溢出（测试模拟）");
+        await WaitUntilAsync(() => Volatile.Read(ref notifications) > 0, TimeSpan.FromSeconds(2));
+
+        Assert.True(notifications > 0, "强制重扫没有触发通知");
+        Assert.Equal(1, watcher.RescanCount);
+        Assert.Contains("缓冲区溢出", watcher.LastDiagnostic);
+    }
+
+    [Fact]
     public void 释放后再变化不会炸()
     {
         var watcher = new MappedFolderWatcher(_root);

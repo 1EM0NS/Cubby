@@ -120,6 +120,19 @@ internal static class NativeMethods
     internal const uint MouseeventfMove = 0x0001;
     internal const uint MouseeventfLeftDown = 0x0002;
     internal const uint MouseeventfLeftUp = 0x0004;
+    internal const uint MouseeventfVirtualDesk = 0x4000;
+    internal const uint MouseeventfAbsolute = 0x8000;
+
+    // GetSystemMetrics 的索引
+    internal const int SmCxScreen = 0;
+    internal const int SmCyScreen = 1;
+    internal const int SmXVirtualScreen = 76;
+    internal const int SmYVirtualScreen = 77;
+    internal const int SmCxVirtualScreen = 78;
+    internal const int SmCyVirtualScreen = 79;
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetrics(int index);
 
     internal delegate void WinEventProc(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time);
 

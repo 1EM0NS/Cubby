@@ -19,4 +19,7 @@ internal interface IBoxChangeSink
 
     /// <summary>一次桌面图标吸附的结果摘要（右键菜单「吸附桌面图标」）。</summary>
     void OnAdoptReport(string summary);
+
+    /// <summary>请求打开某个盒子的搜索窗口。</summary>
+    void OnSearchRequested(Box box);
 }

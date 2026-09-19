@@ -125,6 +125,24 @@ internal sealed class MappedFolderService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 让某个映射盒子强制整体重扫一次（监视器报错/缓冲区溢出时走这条路径）。
+    /// 返回 false 表示这个盒子当前没有监视器。
+    /// </summary>
+    public bool RequestRescan(string boxId, string reason)
+    {
+        lock (_gate)
+        {
+            if (!_watchers.TryGetValue(boxId, out var watcher))
+            {
+                return false;
+            }
+
+            watcher.RequestRescan(reason);
+            return true;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

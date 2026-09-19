@@ -28,11 +28,22 @@ internal sealed class OverlayManager : IBoxChangeSink
     /// <summary>映射文件夹的同步器：目录一变就把新内容推给盒子。</summary>
     private readonly MappedFolderService _mapping;
 
+    /// <summary>每个盒子一份搜索索引（事件驱动重建，空闲不跑）。</summary>
+    private readonly SearchService _search = new();
+
+    /// <summary>每个盒子最多开一个搜索窗口。</summary>
+    private readonly Dictionary<string, SearchWindow> _searchWindows = new(StringComparer.Ordinal);
+
     public OverlayManager(LayoutService layout)
     {
         _layout = layout;
         _mapping = new MappedFolderService(layout, ApplyBoxUpdate);
     }
+
+    /// <summary>搜索索引状态（诊断面板与状态报告）。</summary>
+    public string SearchDescription => _search.Describe();
+
+    public SearchService Search => _search;
 
     /// <summary>映射同步的诊断（供诊断面板与状态报告）。</summary>
     public IReadOnlyList<string> MappingDiagnostics => _mapping.Diagnostics;
@@ -104,6 +115,9 @@ internal sealed class OverlayManager : IBoxChangeSink
         // 重建后按新布局重挂映射监视器（盒子可能被挪到别的显示器，但映射关系不变）
         _mapping.Sync(_layout.Boxes);
 
+        // 索引跟着布局一起重建：换显示器、启动、还原快照都走这里
+        _search.RebuildAll(_layout.Boxes);
+
         AppendRebuildLog(reason);
     }
 
@@ -121,7 +135,14 @@ internal sealed class OverlayManager : IBoxChangeSink
         {
             window.ApplyBoxUpdate(box);
         }
+
+        // 条目变了就只重建这一个盒子的索引（不整表重建，避免无关盒子跟着抖）
+        _search.RebuildBox(box);
     }
+
+    /// <summary>让某个映射盒子强制整体重扫（监视器报错 / 缓冲区溢出的路径）。</summary>
+    public bool RequestMappingRescan(string boxId, string reason) =>
+        _mapping.RequestRescan(boxId, reason);
 
     /// <summary>盒子当前是否显示。</summary>
     public bool BoxesVisible => _boxesVisible;
@@ -157,6 +178,9 @@ internal sealed class OverlayManager : IBoxChangeSink
     public void OnBoxChanged(Box box)
     {
         _layout.UpdateBox(box);
+
+        // 条目可能变了（拖入 / 移出 / 重命名），索引跟上
+        _search.RebuildBox(box);
 
         // 映射关系可能刚被建立或解除，让同步器跟上
         _mapping.Sync(_layout.Boxes);
@@ -205,6 +229,25 @@ internal sealed class OverlayManager : IBoxChangeSink
     }
 
     public void OnAdoptReport(string summary) => LastAdoptSummary = summary;
+
+    /// <summary>打开某个盒子的搜索窗口。同一个盒子只开一个，重复点就激活已有的那个。</summary>
+    public void OnSearchRequested(Box box)
+    {
+        if (_searchWindows.TryGetValue(box.Id, out var existing) && existing.IsLoaded)
+        {
+            existing.Activate();
+            return;
+        }
+
+        var window = new SearchWindow(box.Id, box.Name, _search, OnItemOpen);
+        window.Closed += (_, _) => _searchWindows.Remove(box.Id);
+        _searchWindows[box.Id] = window;
+        window.Show();
+    }
+
+    /// <summary>某个盒子当前的搜索窗口（自动化验收用；没开则为 null）。</summary>
+    internal SearchWindow? SearchWindowOf(string boxId) =>
+        _searchWindows.TryGetValue(boxId, out var window) ? window : null;
 
     /// <summary>诊断用的显示器摘要。</summary>
     public string DescribeMonitors()

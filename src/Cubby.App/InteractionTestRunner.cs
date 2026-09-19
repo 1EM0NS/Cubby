@@ -103,8 +103,11 @@ internal static class InteractionTestRunner
                     $"({afterMove.Bounds.X:0},{afterMove.Bounds.Y:0}) 期望 ({expectX:0},{expectY:0})；抓取点命中 {grabOwner}"));
 
                 // 2. 拖动右下角手柄缩放
-                var gripX = PhysX(afterMove.Bounds.X + afterMove.Bounds.Width) - 6;
-                var gripY = PhysY(afterMove.Bounds.Y + afterMove.Bounds.Height) - 6;
+                // 抓取点往内缩 10 像素而不是贴着角：盒子是圆角的（CornerRadius 12），
+                // 手柄自己还带 3 的小圆角，**最角落那几个像素在逐像素 alpha 下是透明的**，
+                // 贴角抓取会时不时穿到桌面上去（表现为"缩放没反应"）
+                var gripX = PhysX(afterMove.Bounds.X + afterMove.Bounds.Width) - 10;
+                var gripY = PhysY(afterMove.Bounds.Y + afterMove.Bounds.Height) - 10;
                 var gripOwner = PointOwner(gripX, gripY);
                 await MouseClicker.DragAsync(gripX, gripY, gripX + 80, gripY + 60);
                 await Task.Delay(250);
