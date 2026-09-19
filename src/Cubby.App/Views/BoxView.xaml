@@ -24,6 +24,15 @@
                                    FontWeight="Medium"
                                    TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="SearchButton"
+                                    Width="28"
+                                    Height="24"
+                                    Margin="0,0,4,0"
+                                    Padding="0"
+                                    FontSize="12"
+                                    ToolTip="搜索这个盒子里的条目"
+                                    Content="🔍"
+                                    Click="OnSearch" />
                             <Button x:Name="LockButton"
                                     Width="28"
                                     Height="24"

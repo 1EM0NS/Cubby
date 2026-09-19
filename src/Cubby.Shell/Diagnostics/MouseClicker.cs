@@ -25,6 +25,48 @@ public static class MouseClicker
     public static void MoveTo(int x, int y) => NativeMethods.SetCursorPos(x, y);
 
     /// <summary>
+    /// 用 <c>SendInput</c> 把光标移到绝对坐标（跨全虚拟桌面）。
+    ///
+    /// 与 <see cref="MoveTo"/> 的区别很要紧：<c>SetCursorPos</c> 是"直接设位置"，
+    /// 产生的移动事件**可能被合并甚至不到达窗口**，用它做拖动会时灵时不灵
+    /// （M0 采钩子链时就踩过这个坑）。拖动必须用这个方法。
+    /// </summary>
+    public static bool MoveToViaInput(int x, int y)
+    {
+        var left = NativeMethods.GetSystemMetrics(NativeMethods.SmXVirtualScreen);
+        var top = NativeMethods.GetSystemMetrics(NativeMethods.SmYVirtualScreen);
+        var width = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCxVirtualScreen) - 1);
+        var height = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SmCyVirtualScreen) - 1);
+
+        var normalizedX = (int)Math.Round((x - left) * 65535.0 / width);
+        var normalizedY = (int)Math.Round((y - top) * 65535.0 / height);
+
+        var inputs = new[]
+        {
+            new NativeMethods.Input
+            {
+                Type = NativeMethods.InputMouse,
+                Union = new NativeMethods.InputUnion
+                {
+                    Mouse = new NativeMethods.MouseInput
+                    {
+                        Dx = normalizedX,
+                        Dy = normalizedY,
+                        Flags = NativeMethods.MouseeventfMove |
+                                NativeMethods.MouseeventfAbsolute |
+                                NativeMethods.MouseeventfVirtualDesk,
+                    },
+                },
+            },
+        };
+
+        return NativeMethods.SendInput(
+            1,
+            inputs,
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.Input>()) == 1;
+    }
+
+    /// <summary>
     /// 相对移动光标。与 <see cref="MoveTo"/> 的区别很重要：
     /// SetCursorPos 是直接设置位置，不产生经过钩子链的输入事件；
     /// 这个方法走 SendInput，会产生真实的移动事件，因此可以用来验证钩子链是否活着。
@@ -69,19 +111,23 @@ public static class MouseClicker
 
     /// <summary>
     /// 按住左键从一点拖到另一点，用于交互验收。
-    /// 分步移动是必要的：WPF 只有在收到连续的 MouseMove 时才会跟随更新，
-    /// 一步跳到终点只会产生一次移动事件，拖动逻辑看起来就像"没反应"。
+    ///
+    /// 两步都很关键：
+    /// 1. **每一步都用 SendInput 的绝对移动**（不是 SetCursorPos）——后者产生的移动事件可能不到达窗口，
+    ///    会让拖动时灵时不灵；
+    /// 2. **分步移动**：WPF 只有收到连续的 MouseMove 才会跟随更新，一步跳到终点只会产生一次移动事件，
+    ///    拖动逻辑看起来就像"没反应"。
     /// </summary>
     public static async Task DragAsync(int fromX, int fromY, int toX, int toY, int steps = 6)
     {
-        MoveTo(fromX, fromY);
+        MoveToViaInput(fromX, fromY);
         await Task.Delay(120);
 
         LeftButtonDown();
 
         for (var i = 1; i <= steps; i++)
         {
-            MoveTo(fromX + ((toX - fromX) * i / steps), fromY + ((toY - fromY) * i / steps));
+            MoveToViaInput(fromX + ((toX - fromX) * i / steps), fromY + ((toY - fromY) * i / steps));
             await Task.Delay(40);
         }
 

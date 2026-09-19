@@ -100,8 +100,26 @@ public sealed class MappedFolderWatcher : IDisposable
         // 走到这里多半是缓冲区溢出（也有可能是目录被拔掉）。事件已经丢了，
         // 唯一正确的处理是立刻整体重扫一次，而不是假装没发生。
         OverflowRescanCount++;
-        LastDiagnostic = $"监视器错误（多为缓冲区溢出）：{e.GetException().Message}";
-        Queue();
+        RequestRescan($"监视器错误（多为缓冲区溢出）：{e.GetException().Message}");
+    }
+
+    /// <summary>
+    /// 强制整体重扫一次并立即通知。
+    ///
+    /// 语义是"我可能漏掉事件了，重来一遍"——缓冲区溢出的 <c>Error</c> 事件走的就是这里。
+    /// 之所以做成公开方法，是因为**真实溢出无法稳定复现**（要一瞬间灌进上千个事件），
+    /// 验收只能直接驱动这条路径；把路径本身做成可调用的，比在测试里抠私有方法诚实得多。
+    /// </summary>
+    public void RequestRescan(string reason)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        LastDiagnostic = reason;
+        RescanCount++;
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>把短时间内的多个事件合并成一次通知。</summary>
