@@ -1,7 +1,0 @@
-feat(box): 拖入文件生成引用（issue #7）
-
-- Core 新增 DropImport：路径转条目，按磁盘实际情况判定 File/Folder/Url，
-  已入盒与本次重复路径去重；只登记引用，绝不触碰磁盘实体（P4）
-- BoxView 开 AllowDrop 并处理 Drop，走 WPF 底层的 OLE 通道
-- 新增 --selftest-drop 自动化验收：真实临时文件 + 路径/存在性/时间戳/大小四项比对
-- 工作日志追加会话 9
