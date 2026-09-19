@@ -46,6 +46,18 @@
   3. 读无 BOM 的 UTF-8 脚本会按 ANSI 解析，中文直接报语法错误
   → **结论：给 `gh` 传中文内容一律用 `--body-file` 传文件；`.ps1` 存盘时带 BOM。**
 - 本机没装 `pwsh`（PowerShell 7），CI 的 `windows-latest` 上有。
+- **⚠️ `git pull` / `git checkout` 会丢文件，务必用免沙箱的方式跑，跑完立刻数文件数。**
+  2026-09-20 连撞两次：`git pull` 之后 `git status` 把 `src/**` 下 97 个文件报成 ` D`，
+  而 `HEAD` 与索引都是完整的——**这是真的丢了工作区文件**，不是索引脏。
+  沙箱里的命令要写很多文件时会静默失败一部分。
+  收尾动作固定成这三步（最后一步是硬要求，不是可选）：
+  ```bash
+  git switch main && git pull
+  git status --short                 # 不该出现成片的 " D "
+  ls src/Cubby.App | wc -l           # 应该 50 上下；只剩个位数就是丢了
+  ```
+  真丢了就 `git restore --worktree .`（免沙箱）——索引 == HEAD，内容无损。
+  别用 `git checkout -- .` 之外的破坏性命令，也别 `git add` 之后才发现在删文件。
 - **`gh pr merge --squash --delete-branch` 不会自动切回本地 `main`**：合并后本地仍停在已被删除的分支上，紧接着 `git pull` 会报 `no such ref was fetched`，很容易误判为"合并失败"。
   → 判断合并结果一律以 `gh pr view <编号> --json state,mergedAt` 为准，**不要看 git 本地状态**。收尾动作：`git switch main && git pull && git branch -D <分支>`。
 
@@ -97,6 +109,20 @@ gh issue list --repo 1EM0NS/Cubby --limit 30
   图标是我们留在用户机器上的副作用，优先级高于"留证据"；改 `CrashReporter.Handle` 时不要调换。
 - `CrashLog` 的所有公开方法**都不抛异常**，写不进去就返回 `null`——日志问题绝不升级成崩溃问题。
 
+### 挂机采样（A7）判据与「工作集」那个口径坑
+
+- `--soak <分钟>` 跑真挂机，`--selftest-soak` 是 24 秒的短程自检；**两者是同一条代码路径**，只差时长与间隔
+  （`--soak-interval <秒>` 可改间隔，默认 30 秒）。判定逻辑在 `Cubby.Core/Diagnostics/SoakAnalysis.cs`（纯函数、有单测）。
+- 判据：句柄 / GDI / USER / 线程数**既不单调增长、首末差也在噪声阈值内**（句柄 ±8，其余 ±4），
+  私有字节**末值 ≤ 120MB 且斜率 ≤ 1MB/分**（或首末差 ≤ 8MB，容忍 GC 抖动）。跳过前 2 次预热。
+- **采样期间会真的改布局**（折叠 / 展开 + 挪位置，走 `OnBoxChanged` + `ApplyBoxUpdate`），
+  否则「不增长」说明不了任何事。跑完会 `layout.Apply(原文档)` 还原，不会把你的摆放留在那儿。
+- **⚠️ 工作集那一项是「只报不判」，别以为它是绿的**：本机稳态工作集 **139~150MB**，
+  超过技术方案第 8 章的 120MB；但同一时刻**私有字节只有 96~106MB**（在预算内）。
+  两个口径差约 40MB，第 8 章原文写的是「常驻内存」而 #41 写的是「工作集」——**口径歧义见 issue #46**。
+  报告里两个数都会列出、工作集单独标 ⚠。若判定要改成按工作集口径，把
+  `SoakAnalysis` 里那一项的 `Gating` 改成 `true`，`--selftest-soak` 会立刻变 FAIL。
+
 ### Cubby 自带的自动化验收（报告都写到 `artifacts/`）
 
 ```powershell
@@ -117,6 +143,8 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-coexist      # 同类软件共存（A8）：造真实同名进程，证明只提示不抢占（写 coexist-report.md）
 & $app --selftest-onboard      # 首次运行引导：出现 / 跳过 / 重置三条路径 + 托盘「使用指引」（写 onboard-report.md）
 & $app --selftest-crashlog     # 崩溃日志：注入假异常落盘 + 文件头 + 轮转/保留 + 提示窗可操作（写 crashlog-report.md）
+& $app --selftest-soak         # 稳定性采样门禁（A7）短程自检：判定器 + 采样链路（写 soak-report.md）
+& $app --soak 480              # 真挂机 480 分钟（A7 的完整结论只能由它给出）；--soak-interval <秒> 改采样间隔
 & $app --reset-onboarding      # 重置引导标记，下次启动重新出现欢迎窗（换机、演示前重放用）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
