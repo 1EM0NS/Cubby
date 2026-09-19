@@ -7,6 +7,7 @@ using Cubby.Core.Layout;
 using Cubby.Core.Model;
 using Cubby.Core.Platform;
 using Cubby.Shell.Desktop;
+using WinForms = System.Windows.Forms;
 
 namespace Cubby.App.Views;
 
@@ -104,7 +105,8 @@ public partial class BoxView : UserControl
             ? Color.FromArgb(0xFF, 0xEF, 0xAA, 0x17)
             : Color.FromArgb(0xFF, 0x0F, 0xDC, 0x78));
 
-        TitleText.Text = box.IsLocked ? $"🔒 {box.Name}" : box.Name;
+        TitleText.Text = (box.IsLocked ? "🔒 " : string.Empty) +
+                         (box.MappedFolder is null ? box.Name : $"⤷ {box.Name}");
         TitleText.FontSize = BoxStyle.FontSize;
 
         LockButton.Content = box.IsLocked ? "🔒" : "🔓";
@@ -208,10 +210,92 @@ public partial class BoxView : UserControl
         var menu = new ContextMenu();
         menu.Items.Add(MenuEntry("吸附盒子范围内的桌面图标", OnAdoptMenuClick));
         menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("映射文件夹…", OnMapFolderMenuClick));
+        menu.Items.Add(MenuEntry("解除映射", OnUnmapFolderMenuClick));
+        menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry("重命名盒子", RequestRename));
 
         return menu;
     }
+
+    private void OnMapFolderMenuClick()
+    {
+        using var dialog = new WinForms.FolderBrowserDialog
+        {
+            Description = "选择要映射到这个盒子的文件夹",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false,
+        };
+
+        if (dialog.ShowDialog() != WinForms.DialogResult.OK)
+        {
+            return;
+        }
+
+        var folder = dialog.SelectedPath;
+
+        var answer = MessageBox.Show(
+            Window.GetWindow(this),
+            $"将把「{folder}」的内容显示在这个盒子里，并跟随它的增删变化。{Environment.NewLine}{Environment.NewLine}" +
+            "Cubby 不会移动、复制或删除该文件夹里的任何东西，只是换个地方展示。继续？",
+            "Cubby · 映射文件夹",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        // 目标不可用时要明确说话，不能让用户以为"这个文件夹本来就是空的"
+        if (!MapFolder(folder))
+        {
+            MessageBox.Show(
+                Window.GetWindow(this),
+                LastMapDiagnostic ?? "映射失败。",
+                "Cubby · 映射文件夹",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private void OnUnmapFolderMenuClick()
+    {
+        if (Current.MappedFolder is null)
+        {
+            MessageBox.Show(Window.GetWindow(this), "这个盒子没有映射文件夹。", "Cubby", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        UnmapFolder();
+    }
+
+    /// <summary>
+    /// 把一个目录映射到本盒子：内容来自首次扫描。目录不可用时返回 false，并留下原因。
+    /// **只读目录，不改动磁盘上的任何东西**（P4）。
+    /// </summary>
+    internal bool MapFolder(string? folder)
+    {
+        if (!MappedFolderService.TryMap(Current, folder ?? string.Empty, out var updated, out var diagnostic))
+        {
+            LastMapDiagnostic = diagnostic;
+            return false;
+        }
+
+        Apply(updated);
+        LastMapDiagnostic = diagnostic;
+        return true;
+    }
+
+    /// <summary>解除映射：只摘掉映射关系与条目引用，磁盘上的目录与文件一个都不动（P4）。</summary>
+    internal void UnmapFolder()
+    {
+        Apply(Current with { MappedFolder = null, Items = [] });
+        LastMapDiagnostic = "已解除映射；文件夹里的内容与位置完全没有改动。";
+    }
+
+    /// <summary>最近一次映射操作的说明（诊断与自动化验收用）。</summary>
+    internal string? LastMapDiagnostic { get; private set; }
 
     private void OnAdoptMenuClick()
     {

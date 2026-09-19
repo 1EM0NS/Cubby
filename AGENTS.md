@@ -80,6 +80,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-shell        # 托盘 / 自启 / 样式 / 显隐 / 资源基线（写 shell-report.md）
 & $app --selftest-adopt        # 桌面图标吸附：读取 + 吸附前后位置一字不差（写 adopt-report.md）
 & $app --selftest-snapshot     # 布局快照：新建 / 列出 / 还原 + 还原前后指纹一致（写 snapshot-report.md）
+& $app --selftest-map          # 文件夹映射：实时增删 + 原目录指纹不变（写 map-report.md）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）
