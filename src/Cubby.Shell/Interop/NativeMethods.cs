@@ -35,6 +35,7 @@ internal static class NativeMethods
     internal const uint WineventSkipOwnProcess = 0x0002;
 
     internal const uint InputMouse = 0;
+    internal const uint MouseeventfMove = 0x0001;
     internal const uint MouseeventfLeftDown = 0x0002;
     internal const uint MouseeventfLeftUp = 0x0004;
 
@@ -159,6 +160,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern nint GetParent(nint hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern nint FindWindowEx(nint parent, nint childAfter, string? className, string? windowTitle);
 
     internal const uint MonitorDefaultToPrimary = 1;
     internal const uint MonitorDefaultToNearest = 2;

@@ -100,4 +100,46 @@ public static class DesktopProbe
 
         return list;
     }
+
+    /// <summary>
+    /// 桌面图层的层级链：持有 SHELLDLL_DefView 的顶层窗口 → SHELLDLL_DefView → SysListView32。
+    /// 只做只读查询，不修改任何东西。M1 做图标吸附时会复用同一套定位逻辑。
+    /// 注意：在 Win11 24H2 上持有 DefView 的可能是 Progman 派生的 WorkerW，因此不能写死 Progman。
+    /// </summary>
+    public static IReadOnlyList<WindowInfo> DesktopLayerChain()
+    {
+        nint owner = 0;
+        nint defView = 0;
+
+        NativeMethods.EnumWindows(
+            (hwnd, _) =>
+            {
+                var found = NativeMethods.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", null);
+                if (found == 0)
+                {
+                    return true;
+                }
+
+                owner = hwnd;
+                defView = found;
+                return false;
+            },
+            0);
+
+        var listView = defView != 0
+            ? NativeMethods.FindWindowEx(defView, 0, "SysListView32", null)
+            : 0;
+
+        var chain = new List<WindowInfo>();
+        foreach (var hwnd in new[] { owner, defView, listView })
+        {
+            var info = Describe(hwnd);
+            if (info is not null)
+            {
+                chain.Add(info);
+            }
+        }
+
+        return chain;
+    }
 }

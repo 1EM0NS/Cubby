@@ -24,6 +24,38 @@ public static class MouseClicker
 
     public static void MoveTo(int x, int y) => NativeMethods.SetCursorPos(x, y);
 
+    /// <summary>
+    /// 相对移动光标。与 <see cref="MoveTo"/> 的区别很重要：
+    /// SetCursorPos 是直接设置位置，不产生经过钩子链的输入事件；
+    /// 这个方法走 SendInput，会产生真实的移动事件，因此可以用来验证钩子链是否活着。
+    /// </summary>
+    public static bool Nudge(int deltaX, int deltaY)
+    {
+        var inputs = new[]
+        {
+            new NativeMethods.Input
+            {
+                Type = NativeMethods.InputMouse,
+                Union = new NativeMethods.InputUnion
+                {
+                    Mouse = new NativeMethods.MouseInput
+                    {
+                        Dx = deltaX,
+                        Dy = deltaY,
+                        Flags = NativeMethods.MouseeventfMove,
+                    },
+                },
+            },
+        };
+
+        var sent = NativeMethods.SendInput(
+            1,
+            inputs,
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.Input>());
+
+        return sent == 1;
+    }
+
     /// <summary>在光标当前所在位置按一次左键。</summary>
     public static bool LeftClick()
     {
