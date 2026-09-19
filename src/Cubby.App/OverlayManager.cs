@@ -42,6 +42,9 @@ internal sealed class OverlayManager : IBoxChangeSink
     /// <summary>最近一次打开条目失败的原因（正常为 null）。</summary>
     public string? LastOpenError { get; private set; }
 
+    /// <summary>最近一次桌面图标吸附的结果摘要（正常为 null）。</summary>
+    public string? LastAdoptSummary { get; private set; }
+
     public OverlayWindow? PrimaryWindow =>
         _windows.FirstOrDefault(w => w.Surface?.IsPrimary == true) ?? _windows.FirstOrDefault();
 
@@ -164,6 +167,8 @@ internal sealed class OverlayManager : IBoxChangeSink
             LastOpenError = $"{item.DisplayName}: {ex.Message}";
         }
     }
+
+    public void OnAdoptReport(string summary) => LastAdoptSummary = summary;
 
     /// <summary>诊断用的显示器摘要。</summary>
     public string DescribeMonitors()

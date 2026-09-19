@@ -40,6 +40,76 @@ internal static class NativeMethods
 
     internal const int RgnOr = 2;
 
+    // ---- 跨进程读取桌面图标（只读，见 DesktopIcons）----
+
+    /// <summary>PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION。</summary>
+    internal const int ProcessAccessForRead = 0x0008 | 0x0010 | 0x0020 | 0x0400;
+
+    internal const int MemCommit = 0x1000;
+    internal const int MemReserve = 0x2000;
+    internal const int MemRelease = 0x8000;
+    internal const int PageReadWrite = 0x04;
+
+    /// <summary>SMTO_ABORTIFHUNG：目标（Explorer）卡住时立刻返回，不让本进程跟着僵住。</summary>
+    internal const uint SmtoAbortIfHung = 0x0002;
+
+    /// <summary>
+    /// 跨进程 <c>LVITEMW</c>。字段顺序与 commctrl.h 一致；x64 下自然对齐后正好 88 字节。
+    /// 只在 LVM_GETITEMTEXTW 时用来传参，**不参与任何写操作**。
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct LvItem
+    {
+        public uint Mask;
+        public int Item;
+        public int SubItem;
+        public uint State;
+        public uint StateMask;
+        public nint Text;
+        public int TextMax;
+        public int Image;
+        public nint Param;
+        public int Indent;
+        public int GroupId;
+        public uint Columns;
+        public nint ColumnOrder;
+        public nint ColumnFormat;
+        public int Group;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint OpenProcess(int desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(nint handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint VirtualAllocEx(nint process, nint address, nint size, int allocationType, int protect);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool VirtualFreeEx(nint process, nint address, nint size, int freeType);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ReadProcessMemory(nint process, nint address, byte[] buffer, nint size, out nint read);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool WriteProcessMemory(nint process, nint address, byte[] buffer, nint size, out nint written);
+
+    /// <summary>
+    /// 带超时的 SendMessage。<c>LVM_*</c> 是同步消息，目标若是卡住的 Explorer，
+    /// 普通的 SendMessage 会把本进程一起拖死，所以一律用这个。
+    /// </summary>
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    internal static extern nint SendMessageTimeout(nint hwnd, int msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
+
+    /// <summary>把一组点从 <paramref name="from"/> 的客户区坐标换算到 <paramref name="to"/>；<paramref name="to"/> 为 0 表示屏幕坐标。</summary>
+    [DllImport("user32.dll")]
+    internal static extern int MapWindowPoints(nint from, nint to, ref Point points, uint count);
+
     internal const uint EventSystemForeground = 0x0003;
     internal const uint EventSystemMinimizeStart = 0x0016;
     internal const uint EventSystemMinimizeEnd = 0x0017;

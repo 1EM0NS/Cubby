@@ -67,6 +67,11 @@ public partial class HudWindow : Window
             builder.AppendLine($"打开失败   : {openError}");
         }
 
+        if (_manager.LastAdoptSummary is { } adopt)
+        {
+            builder.AppendLine($"吸附结果   : {adopt}");
+        }
+
         builder.AppendLine();
         builder.AppendLine("== 盒子 ==");
         foreach (var box in _layout.Boxes)
