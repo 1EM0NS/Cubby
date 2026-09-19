@@ -37,6 +37,7 @@ internal static class StateReport
         }
 
         builder.AppendLine($"搜索索引 : {manager.SearchDescription}");
+        builder.AppendLine($"归类规则 : {manager.Rules.Describe()}");
 
         builder.AppendLine();
         builder.AppendLine("== 显示器 ==");

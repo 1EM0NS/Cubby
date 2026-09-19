@@ -82,6 +82,7 @@ public partial class HudWindow : Window
         }
 
         builder.AppendLine($"搜索索引   : {_manager.SearchDescription}");
+        builder.AppendLine($"归类规则   : {_manager.Rules.Describe()}");
 
         builder.AppendLine();
         builder.AppendLine("== 盒子 ==");

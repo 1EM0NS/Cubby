@@ -34,6 +34,9 @@ internal sealed class TrayIcon : IDisposable
         var snapshots = new ToolStripMenuItem("布局快照…");
         snapshots.Click += (_, _) => SnapshotsRequested?.Invoke(this, EventArgs.Empty);
 
+        var rules = new ToolStripMenuItem("归类规则…");
+        rules.Click += (_, _) => RulesRequested?.Invoke(this, EventArgs.Empty);
+
         var exit = new ToolStripMenuItem("退出");
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
@@ -43,6 +46,7 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
         menu.Items.Add(snapshots);
+        menu.Items.Add(rules);
         menu.Items.Add(settings);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exit);
@@ -67,6 +71,8 @@ internal sealed class TrayIcon : IDisposable
     public event EventHandler? SettingsRequested;
 
     public event EventHandler? SnapshotsRequested;
+
+    public event EventHandler? RulesRequested;
 
     public event EventHandler? ExitRequested;
 
