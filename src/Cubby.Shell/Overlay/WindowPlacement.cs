@@ -59,6 +59,16 @@ public static class WindowPlacement
         NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GwlExStyle, (nint)(current | styles));
     }
 
+    /// <summary>
+    /// <c>WS_EX_NOACTIVATE</c> 的位值。公开出来是为了让**跨程序集的验收**能断言
+    /// 「浮层是不抢焦点的、引导窗是普通可激活窗口」——两者的区别就在这一位上。
+    /// </summary>
+    public const long NoActivateFlag = 0x08000000L;
+
+    /// <summary>读某个扩展样式位是否置上。只读查询，不修改任何东西。</summary>
+    public static bool HasExtendedStyle(nint hwnd, long style) =>
+        hwnd != 0 && ((long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle) & style) == style;
+
     /// <summary>让窗口不抢焦点、不出现在任务栏与 Alt+Tab 里。</summary>
     public static void MakeNonActivating(nint hwnd) =>
         AddExtendedStyles(hwnd, NativeMethods.WsExNoActivate | NativeMethods.WsExToolWindow);

@@ -37,6 +37,9 @@ internal sealed class TrayIcon : IDisposable
         var rules = new ToolStripMenuItem("归类规则…");
         rules.Click += (_, _) => RulesRequested?.Invoke(this, EventArgs.Empty);
 
+        var guide = new ToolStripMenuItem("使用指引…");
+        guide.Click += (_, _) => GuideRequested?.Invoke(this, EventArgs.Empty);
+
         var exit = new ToolStripMenuItem("退出");
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
@@ -48,6 +51,7 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add(snapshots);
         menu.Items.Add(rules);
         menu.Items.Add(settings);
+        menu.Items.Add(guide);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exit);
 
@@ -74,6 +78,9 @@ internal sealed class TrayIcon : IDisposable
 
     public event EventHandler? RulesRequested;
 
+    /// <summary>「使用指引」被点击（重新打开首次运行引导，issue #38）。</summary>
+    public event EventHandler? GuideRequested;
+
     public event EventHandler? ExitRequested;
 
     /// <summary>菜单项文字，按顺序。供自动化验收核对（issue #11 的验收标准之一）。</summary>
@@ -82,6 +89,26 @@ internal sealed class TrayIcon : IDisposable
             .OfType<ToolStripItem>()
             .Select(item => item.Text ?? string.Empty)
             .ToList();
+
+    /// <summary>
+    /// 按文字程序化点击某个菜单项（自动化验收用）。
+    /// 走的是 <see cref="ToolStripItem.PerformClick"/>，也就是**用户点击同一条事件链**，
+    /// 因此它证明的是"这一项真的接上了事件"，而不是另造一条捷径。
+    /// </summary>
+    public bool ClickItem(string header)
+    {
+        var item = _icon.ContextMenuStrip?.Items
+            .OfType<ToolStripItem>()
+            .FirstOrDefault(candidate => string.Equals(candidate.Text, header, StringComparison.Ordinal));
+
+        if (item is null)
+        {
+            return false;
+        }
+
+        item.PerformClick();
+        return true;
+    }
 
     public void SetBoxesChecked(bool visible) => _boxesItem.Checked = visible;
 

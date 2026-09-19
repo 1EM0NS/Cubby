@@ -115,6 +115,37 @@ public sealed class LayoutStoreTests : IDisposable
         Assert.Empty(loaded.CoexistAcknowledgedTools);
     }
 
+    /// <summary>
+    /// #38 的引导标记必须落盘：它决定下次启动欢不欢迎你，存不住就等于每次都弹（骚扰）。
+    /// </summary>
+    [Fact]
+    public void 首次运行引导标记能原样读回()
+    {
+        var store = new LayoutStore(_filePath);
+
+        store.Save(SampleDocument() with { OnboardingShown = true });
+        var loaded = store.Load();
+
+        Assert.True(loaded.OnboardingShown);
+    }
+
+    /// <summary>
+    /// 旧配置文件没有 <c>OnboardingShown</c> 字段，读出来必须是 false——
+    /// 那正好等于「还没看过引导」，老用户升级上来会看到一次欢迎窗，这是期望行为而不是缺陷。
+    /// </summary>
+    [Fact]
+    public void 缺少引导标记的旧配置读出来是未看过引导()
+    {
+        // 手写一份"这个字段还不存在"的旧文件，比先存再删更贴近真实情况（不用担心尾逗号）
+        File.WriteAllText(_filePath, """{ "SchemaVersion": 1, "Boxes": [], "SnapshotKeep": 10 }""");
+
+        var store = new LayoutStore(_filePath);
+        var loaded = store.Load();
+
+        Assert.Null(store.LastLoadDiagnostic);
+        Assert.False(loaded.OnboardingShown);
+    }
+
     [Fact]
     public void 覆盖保存会留下备份且不留临时文件()
     {

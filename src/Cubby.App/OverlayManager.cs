@@ -183,6 +183,36 @@ internal sealed class OverlayManager : IBoxChangeSink
         }
     }
 
+    /// <summary>
+    /// 首次引导的「创建第一个盒子」：保证**主屏上有一个盒子**，并让它立刻显示出来。
+    ///
+    /// 已经有盒子就不重复建（幂等）——真实首次运行其实已经由 <see cref="Rebuild"/> 里的
+    /// <see cref="LayoutService.EnsureDefaults"/> 建好了一个，这里主要是兜住"用户把盒子全删了"的情况，
+    /// 所以返回的是一句**如实的说明**而不是硬造一个盒子出来。
+    /// 只动 Cubby 自己的布局文件，不碰用户文件（P4）。
+    /// </summary>
+    public string CreateFirstBoxOnPrimary()
+    {
+        var primary = Monitors.FirstOrDefault(m => m.IsPrimary) ?? Monitors.FirstOrDefault();
+        if (primary is null)
+        {
+            return "没有枚举到任何显示器，无法创建盒子。";
+        }
+
+        var created = _layout.CreateDefaultBox(primary);
+
+        // 新建 / 已存在都要重建一次：引导窗打开的这几秒里浮层可能还没把盒子画出来
+        Rebuild("首次引导：创建第一个盒子");
+
+        // 盒子若被用户在托盘菜单里关过（SetBoxesVisible(false)），刚点了「创建盒子」却看不到会以为没生效
+        SetBoxesVisible(true);
+
+        return created is null
+            ? $"主屏（{primary.Id}）上已经有盒子了，直接用它：{_layout.Boxes.Count} 个盒子。"
+            : $"已在主屏（{primary.Id}）创建盒子「{created.Name}」（{created.Bounds.Width:0}×{created.Bounds.Height:0} DIP），" +
+              $"现有 {_layout.Boxes.Count} 个盒子。";
+    }
+
     /// <summary>某个窗口句柄是否属于我们的任一浮层（多屏下不能只比一个句柄）。</summary>
     public bool IsOurOverlay(nint hwnd) =>
         hwnd != 0 && _windows.Any(w => DesktopProbe.BelongsTo(hwnd, w.Host?.Handle ?? 0));
