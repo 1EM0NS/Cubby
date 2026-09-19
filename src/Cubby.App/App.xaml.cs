@@ -30,10 +30,9 @@ public partial class App : Application
         // 重建的空档里把整个程序关掉。退出只由托盘菜单或自动化流程显式触发。
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        // 崩溃必须留痕：否则自动化运行时只能看到一个退出码，无从排查
-        DispatcherUnhandledException += (_, args) => LogCrash("DispatcherUnhandledException", args.Exception);
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-            LogCrash("AppDomain.UnhandledException", args.ExceptionObject as Exception);
+        // 崩溃必须留痕，且**顺序有讲究**：先还原桌面图标标记、再写日志、最后提示用户。
+        // 三处全局异常（UI 线程 / 致命 / 未观察任务）的统一入口在这里。
+        CrashReporter.Attach(this);
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -127,6 +126,7 @@ public partial class App : Application
                     { Appearance: true } => await AppearanceTestRunner.RunAsync(overlay, layout, options),
                     { Coexist: true } => await CoexistTestRunner.RunAsync(layout, options),
                     { Onboard: true } => await OnboardingTestRunner.RunAsync(manager, layout, options),
+                    { CrashLog: true } => await CrashLogTestRunner.RunAsync(manager, layout, options),
                     _ => 0,
                 };
 
@@ -265,24 +265,7 @@ public partial class App : Application
         _rules.Show();
     }
 
-    /// <summary>把未处理异常写到 artifacts/crash.log（M3 做正式崩溃日志时会统一搬到 %AppData%）。</summary>
-    private static void LogCrash(string source, Exception? exception)
-    {
-        try
-        {
-            var directory = Path.Combine(AppContext.BaseDirectory, "artifacts");
-            Directory.CreateDirectory(directory);
-
-            File.AppendAllText(
-                Path.Combine(directory, "crash.log"),
-                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} | {source}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}",
-                new UTF8Encoding(false));
-        }
-        catch (IOException)
-        {
-            // 连崩溃日志都写不进去时不再做别的事，避免递归
-        }
-    }
+    /// <summary>把未处理异常写到 %AppData%\Cubby\logs 的那套逻辑见 <see cref="CrashReporter"/>。</summary>
 }
 
 /// <summary>命令行参数。</summary>
@@ -307,11 +290,12 @@ internal sealed record SpikeOptions(
     bool Appearance = false,
     bool Coexist = false,
     bool Onboard = false,
-    bool ResetOnboarding = false)
+    bool ResetOnboarding = false,
+    bool CrashLog = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
-        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard;
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard || CrashLog;
 
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -334,7 +318,8 @@ internal sealed record SpikeOptions(
         Appearance: Has(args, "--selftest-appearance"),
         Coexist: Has(args, "--selftest-coexist"),
         Onboard: Has(args, "--selftest-onboard"),
-        ResetOnboarding: Has(args, "--reset-onboarding"));
+        ResetOnboarding: Has(args, "--reset-onboarding"),
+        CrashLog: Has(args, "--selftest-crashlog"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
