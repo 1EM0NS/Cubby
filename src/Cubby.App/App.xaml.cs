@@ -99,6 +99,13 @@ public partial class App : Application
                 return;
             }
 
+            // 挂机采样（A7）量的是**常驻形态**的占用，所以把托盘也拉起来；
+            // 其余验收只关心各自那条路径，不需要托盘。
+            if (options.Soak || options.SoakSelfTest)
+            {
+                StartTray(manager, layout);
+            }
+
             var started = false;
             overlay.ContentRendered += async (_, _) =>
             {
@@ -127,6 +134,8 @@ public partial class App : Application
                     { Coexist: true } => await CoexistTestRunner.RunAsync(layout, options),
                     { Onboard: true } => await OnboardingTestRunner.RunAsync(manager, layout, options),
                     { CrashLog: true } => await CrashLogTestRunner.RunAsync(manager, layout, options),
+                    { SoakSelfTest: true } => await SoakRunner.RunAsync(manager, layout, options),
+                    { Soak: true } => await SoakRunner.RunAsync(manager, layout, options),
                     _ => 0,
                 };
 
@@ -291,11 +300,15 @@ internal sealed record SpikeOptions(
     bool Coexist = false,
     bool Onboard = false,
     bool ResetOnboarding = false,
-    bool CrashLog = false)
+    bool CrashLog = false,
+    bool Soak = false,
+    double? SoakMinutes = null,
+    double? SoakIntervalSeconds = null,
+    bool SoakSelfTest = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
-        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard || CrashLog;
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard || CrashLog || Soak || SoakSelfTest;
 
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -319,10 +332,31 @@ internal sealed record SpikeOptions(
         Coexist: Has(args, "--selftest-coexist"),
         Onboard: Has(args, "--selftest-onboard"),
         ResetOnboarding: Has(args, "--reset-onboarding"),
-        CrashLog: Has(args, "--selftest-crashlog"));
+        CrashLog: Has(args, "--selftest-crashlog"),
+        Soak: Has(args, "--soak"),
+        SoakMinutes: NumberOf(args, "--soak"),
+        SoakIntervalSeconds: NumberOf(args, "--soak-interval"),
+        SoakSelfTest: Has(args, "--selftest-soak"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 取 <c>--名字 数字</c> 里的数字。**必须校验下一个参数真的是数字**：
+    /// 否则 <c>--soak --out artifacts</c> 这种写法会把 <c>--out</c> 当成时长解析。
+    /// </summary>
+    private static double? NumberOf(string[] args, string name)
+    {
+        var raw = ValueOf(args, name);
+
+        return double.TryParse(
+            raw,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value)
+            ? value
+            : null;
+    }
 
     private static string? ValueOf(string[] args, string name)
     {
