@@ -35,11 +35,33 @@ internal enum ItemAction
 /// </summary>
 public partial class BoxView : UserControl
 {
+    // Segoe MDL2 Assets 的矢量字形：比彩色 emoji 干净，而且跟随前景色（主题统一）
+    private const string GlyphEye = "\uE7B3";
+    private const string GlyphEyeOff = "\uED1A";
+    private const string GlyphSearch = "\uE721";
+    private const string GlyphLock = "\uE72E";
+    private const string GlyphUnlock = "\uE785";
+    private const string GlyphChevronDown = "\uE70D";
+    private const string GlyphChevronRight = "\uE76C";
+    private const string GlyphLink = "\uE71B";
+    private const string GlyphAdd = "\uE710";
+
+    private static readonly Color AccentColor = Color.FromRgb(0x0F, 0xDC, 0x78);
+    private static readonly Color WarnColor = Color.FromRgb(0xEF, 0xAA, 0x17);
+    private static readonly Color MappedColor = Color.FromRgb(0x27, 0xD2, 0xBF);
+
+    // 色值统一从主题资源取（盒子是代码里构建的，取不到时退回上面的常量，绝不因此崩溃）
+    private readonly Color _accent;
+    private readonly Color _warn;
+    private readonly Color _mapped;
+    private readonly Color _iconIdle;
+
     private readonly MonitorSurface _surface;
     private IInputElement? _dragSpace;
     private Point _lastPoint;
     private bool _moving;
     private bool _resizing;
+    private bool _hover;
 
     // 条目拖出的待定状态：按下后超过系统拖动阈值才算拖拽，否则算单击
     private BoxItem? _pendingDragItem;
@@ -54,7 +76,17 @@ public partial class BoxView : UserControl
         BoxStyle = style.Normalized();
         _surface = surface;
 
+        _accent = ThemeColor("Cubby.Brush.Accent", AccentColor);
+        _warn = ThemeColor("Cubby.Brush.Warn", WarnColor);
+        _mapped = ThemeColor("Cubby.Brush.Info", MappedColor);
+        _iconIdle = ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0xC8, 0xD2, 0xDC));
+
         Root.ContextMenu = BuildBoxMenu();
+
+        // 悬停提亮：浮层是 WS_EX_NOACTIVATE，拿不到键盘焦点，但鼠标事件照常，因此悬停反馈可行
+        Root.MouseEnter += (_, _) => SetHover(true);
+        Root.MouseLeave += (_, _) => SetHover(false);
+
         Refresh();
     }
 
@@ -101,27 +133,82 @@ public partial class BoxView : UserControl
         Width = box.Bounds.Width;
         Height = BoxGeometry.EffectiveHeight(box);
 
-        Root.CornerRadius = new CornerRadius(BoxStyle.CornerRadius);
-        Root.Background = new SolidColorBrush(Color.FromArgb(
-            (byte)Math.Round(BoxStyle.Opacity * 255),
-            0x1F,
-            0x2A,
-            0x37));
-        Root.BorderBrush = new SolidColorBrush(box.IsLocked
-            ? Color.FromArgb(0xFF, 0xEF, 0xAA, 0x17)
-            : Color.FromArgb(0xFF, 0x0F, 0xDC, 0x78));
+        ApplyChrome(box);
 
-        TitleText.Text = (box.IsLocked ? "🔒 " : string.Empty) +
-                         (box.MappedFolder is null ? box.Name : $"⤷ {box.Name}");
+        // 状态图标：锁定 > 映射。标题左移给图标让位，避免文字压在上面
+        var hasState = box.IsLocked || box.MappedFolder is not null;
+        TitleIcon.Text = box.IsLocked ? GlyphLock : GlyphLink;
+        TitleIcon.Foreground = new SolidColorBrush(box.IsLocked ? _warn : _mapped);
+        TitleIcon.Visibility = hasState ? Visibility.Visible : Visibility.Collapsed;
+        TitleText.Margin = new Thickness(hasState ? 30 : 14, 0, 0, 0);
+        TitleText.Text = box.Name;
         TitleText.FontSize = BoxStyle.FontSize;
 
-        LockButton.Content = box.IsLocked ? "🔒" : "🔓";
-        CollapseButton.Content = box.IsCollapsed ? "▸" : "▾";
+        DesktopIconButton.Content = DesktopIcons.IsVisible() ? GlyphEye : GlyphEyeOff;
+        SearchButton.Content = GlyphSearch;
+        LockButton.Content = box.IsLocked ? GlyphLock : GlyphUnlock;
+        LockButton.Foreground = new SolidColorBrush(box.IsLocked ? _warn : _iconIdle);
+        CollapseButton.Content = box.IsCollapsed ? GlyphChevronRight : GlyphChevronDown;
+
         ItemArea.Visibility = box.IsCollapsed ? Visibility.Collapsed : Visibility.Visible;
         ResizeGrip.Visibility = box.IsCollapsed || box.IsLocked ? Visibility.Collapsed : Visibility.Visible;
 
         BuildItems();
     }
+
+    /// <summary>
+    /// 盒子的"外壳"：渐变底 + 状态色描边 + 状态色强调条。
+    /// **全部落在盒子矩形内**——盒子外必须保持 alpha=0，否则会抢走桌面与动态壁纸的点击（P2）。
+    /// </summary>
+    private void ApplyChrome(Box box)
+    {
+        var alpha = (byte)Math.Round(Math.Clamp(BoxStyle.Opacity, 0.2, 1.0) * 255);
+        var edge = box.IsLocked ? _warn : box.MappedFolder is null ? _accent : _mapped;
+
+        Root.CornerRadius = new CornerRadius(BoxStyle.CornerRadius);
+        Root.Background = BoxBackground(alpha);
+        // 描边也跟着透明度走，但留一点下限，避免调暗后完全看不出盒子边界
+        Root.BorderBrush = new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Round(Math.Max((int)alpha, 90) * (_hover ? 1.0 : 0.62)),
+            edge.R,
+            edge.G,
+            edge.B));
+        AccentBar.Background = new SolidColorBrush(Color.FromArgb(_hover ? (byte)255 : (byte)180, edge.R, edge.G, edge.B));
+    }
+
+    private Brush BoxBackground(byte alpha)
+    {
+        // 悬停时整体提亮一档，形成"被指到"的反馈
+        var lift = _hover ? 0x12 : 0x00;
+
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(0, 1),
+        };
+
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x24 + lift), (byte)(0x2E + lift), (byte)(0x3C + lift)), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x17 + lift), (byte)(0x1F + lift), (byte)(0x2A + lift)), 0.5));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x11 + lift), (byte)(0x17 + lift), (byte)(0x20 + lift)), 1));
+        return brush;
+    }
+
+    private void SetHover(bool hover)
+    {
+        if (_hover == hover)
+        {
+            return;
+        }
+
+        _hover = hover;
+        ApplyChrome(Current);
+    }
+
+    /// <summary>从主题资源里取一个颜色；资源缺失时退回常量（盒子渲染绝不能因为主题问题炸掉）。</summary>
+    private Color ThemeColor(string key, Color fallback) =>
+        TryFindResource(key) is SolidColorBrush brush ? brush.Color : fallback;
+
+    private static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
 
     private void BuildItems()
     {
@@ -138,15 +225,7 @@ public partial class BoxView : UserControl
 
         if (Current.Items.Count == 0)
         {
-            ItemsHost.Items.Add(new TextBlock
-            {
-                Text = Current.MappedFolder is null ? "（空盒子：把文件拖进来）" : $"映射：{Current.MappedFolder}",
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x7A, 0x7A, 0x85)),
-                FontSize = Math.Max(11, BoxStyle.FontSize - 2),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(4, 8, 4, 0),
-            });
-
+            ItemsHost.Items.Add(CreateEmptyState(itemWidth));
             return;
         }
 
@@ -156,30 +235,72 @@ public partial class BoxView : UserControl
         }
     }
 
+    /// <summary>空盒子 / 映射为空的引导：虚线框 + 一句能照着做的话，而不是一行灰字。</summary>
+    private FrameworkElement CreateEmptyState(double itemWidth)
+    {
+        var mapped = Current.MappedFolder is not null;
+
+        var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = GlyphAdd,
+            FontFamily = (FontFamily)FindResource("Cubby.Font.Icon"),
+            FontSize = 18,
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0x97, 0xA4, 0xB1)), 0x99)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = mapped ? "这个文件夹现在是空的" : "把文件拖进来",
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0x97, 0xA4, 0xB1)), 0xE6)),
+            FontSize = Math.Max(11, BoxStyle.FontSize - 1),
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 0),
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = mapped ? Current.MappedFolder : "只登记引用，不移动文件",
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextDim", Color.FromRgb(0x66, 0x73, 0x7F)), 0xCC)),
+            FontSize = Math.Max(10, BoxStyle.FontSize - 3),
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 3, 0, 0),
+        });
+
+        return new Border
+        {
+            Width = Math.Max(120, itemWidth),
+            Margin = new Thickness(4, 6, 4, 6),
+            Padding = new Thickness(10, 16, 10, 16),
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x3D, 0x97, 0xA4, 0xB1)),
+            Child = panel,
+        };
+    }
+
     private FrameworkElement CreateItemVisual(BoxItem item, double itemWidth)
     {
-        var stack = new StackPanel
-        {
-            Width = itemWidth,
-            Margin = new Thickness(0, 4, 0, 8),
-            Cursor = Cursors.Hand,
-            ToolTip = item.TargetPath,
-        };
-
         var badge = new Border
         {
-            Width = 34,
-            Height = 34,
-            CornerRadius = new CornerRadius(6),
-            Background = new SolidColorBrush(BadgeColor(item)),
-            HorizontalAlignment = HorizontalAlignment.Center,
+            Style = (Style)FindResource("Cubby.Badge"),
+            Background = new LinearGradientBrush(
+                BadgeColor(item),
+                BadgeColor(item, brighten: true),
+                new Point(0, 0),
+                new Point(0, 1)),
         };
         badge.Child = new TextBlock
         {
             Text = BadgeText(item),
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x10, 0x14, 0x18)),
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.Bg", Color.FromRgb(0x10, 0x14, 0x18)), 0xFF)),
+            FontSize = 10.5,
+            FontWeight = FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -187,25 +308,36 @@ public partial class BoxView : UserControl
         var name = new TextBlock
         {
             Text = item.DisplayName,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xE5, 0xE5, 0xE5)),
+            Foreground = new SolidColorBrush(ThemeColor("Cubby.Brush.Text", Color.FromRgb(0xE8, 0xED, 0xF3))),
             FontSize = Math.Max(10, BoxStyle.FontSize - 2),
             TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.Wrap,
             MaxHeight = 34,
-            Margin = new Thickness(2, 5, 2, 0),
+            Margin = new Thickness(2, 6, 2, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
 
+        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(badge);
         stack.Children.Add(name);
 
-        stack.ContextMenu = BuildItemMenu(item);
+        var tile = new Border
+        {
+            Style = (Style)FindResource("Cubby.ItemTile"),
+            Width = itemWidth,
+            Margin = new Thickness(0, 3, 0, 4),
+            Cursor = Cursors.Hand,
+            ToolTip = item.TargetPath,
+            Child = stack,
+            ContextMenu = BuildItemMenu(item),
+        };
 
-        stack.MouseLeftButtonDown += (_, e) => OnItemMouseDown(stack, item, e);
-        stack.MouseMove += OnItemMouseMove;
-        stack.MouseLeftButtonUp += (_, _) => ResetPendingDrag();
+        tile.MouseLeftButtonDown += (_, e) => OnItemMouseDown(tile, item, e);
+        tile.MouseMove += OnItemMouseMove;
+        tile.MouseLeftButtonUp += (_, _) => ResetPendingDrag();
 
-        return stack;
+        return tile;
     }
 
     // ---- 右键菜单 ----
@@ -512,13 +644,27 @@ public partial class BoxView : UserControl
         return string.IsNullOrEmpty(extension) ? "FILE" : extension[..Math.Min(4, extension.Length)];
     }
 
-    private static Color BadgeColor(BoxItem item) => item.Kind switch
+    /// <summary>条目图标底色：按类型取色（同样来自主题）；<paramref name="brighten"/> 取渐变的下半段，形成轻微立体感。</summary>
+    private Color BadgeColor(BoxItem item, bool brighten = false)
     {
-        ItemKind.Folder => Color.FromArgb(0xFF, 0x0F, 0xDC, 0x78),
-        ItemKind.Url => Color.FromArgb(0xFF, 0x80, 0xC1, 0xFF),
-        ItemKind.Mapped => Color.FromArgb(0xFF, 0x27, 0xD2, 0xBF),
-        _ => Color.FromArgb(0xFF, 0xD3, 0xD4, 0xDA),
-    };
+        var baseColor = item.Kind switch
+        {
+            ItemKind.Folder => _accent,
+            ItemKind.Url => ThemeColor("Cubby.Brush.Info", Color.FromRgb(0x80, 0xC1, 0xFF)),
+            ItemKind.Mapped => _mapped,
+            _ => ThemeColor("Cubby.Brush.Text", Color.FromRgb(0xD3, 0xD4, 0xDA)),
+        };
+
+        if (!brighten)
+        {
+            return baseColor;
+        }
+
+        // 往上提亮而不是往下压暗：深色底上"顶部亮、底部暗"更像一块实体
+        static byte Lift(byte value) => (byte)Math.Min(255, value + 0x22);
+
+        return Color.FromRgb(Lift(baseColor.R), Lift(baseColor.G), Lift(baseColor.B));
+    }
 
     /// <summary>
     /// 拖动时的参考坐标系。**必须用不会跟着盒子移动的容器**（父 Canvas），

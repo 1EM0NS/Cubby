@@ -2,41 +2,42 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Cubby · 样式设置"
-        Width="420"
+        Width="440"
         SizeToContent="Height"
         ResizeMode="NoResize"
+        Style="{StaticResource Cubby.Window}"
         WindowStartupLocation="CenterScreen">
-    <StackPanel Margin="20" x:Name="Root">
+    <StackPanel Margin="22" x:Name="Root">
 
-        <TextBlock Text="样式设置" FontSize="18" FontWeight="SemiBold" />
-        <TextBlock Margin="0,6,0,14"
-                   TextWrapping="Wrap"
-                   Foreground="#52525B"
+        <TextBlock Text="样式设置" Style="{StaticResource Cubby.H1}" />
+        <TextBlock Margin="0,6,0,16"
+                   Style="{StaticResource Cubby.Caption}"
                    Text="拖动即生效，并自动保存。圆角与字号只影响渲染；透明度与列数会同时写进每个盒子。" />
 
-        <TextBlock x:Name="OpacityLabel" Margin="0,0,0,4" />
+        <TextBlock x:Name="OpacityLabel" Margin="0,0,0,6" Foreground="{StaticResource Cubby.Brush.TextMuted}" />
         <Slider x:Name="OpacitySlider" Minimum="0.2" Maximum="1.0"
                 TickFrequency="0.05" IsSnapToTickEnabled="True"
                 ValueChanged="OnOpacityChanged" />
 
-        <TextBlock x:Name="CornerLabel" Margin="0,12,0,4" />
+        <TextBlock x:Name="CornerLabel" Margin="0,14,0,6" Foreground="{StaticResource Cubby.Brush.TextMuted}" />
         <Slider x:Name="CornerSlider" Minimum="0" Maximum="32"
                 TickFrequency="1" IsSnapToTickEnabled="True"
                 ValueChanged="OnCornerChanged" />
 
-        <TextBlock x:Name="ColumnsLabel" Margin="0,12,0,4" />
+        <TextBlock x:Name="ColumnsLabel" Margin="0,14,0,6" Foreground="{StaticResource Cubby.Brush.TextMuted}" />
         <Slider x:Name="ColumnsSlider" Minimum="1" Maximum="12"
                 TickFrequency="1" IsSnapToTickEnabled="True"
                 ValueChanged="OnColumnsChanged" />
 
-        <TextBlock x:Name="FontLabel" Margin="0,12,0,4" />
+        <TextBlock x:Name="FontLabel" Margin="0,14,0,6" Foreground="{StaticResource Cubby.Brush.TextMuted}" />
         <Slider x:Name="FontSlider" Minimum="10" Maximum="24"
                 TickFrequency="1" IsSnapToTickEnabled="True"
                 ValueChanged="OnFontChanged" />
 
         <Button x:Name="CloseButton"
-                Margin="0,18,0,0"
-                Padding="8"
+                Style="{StaticResource Cubby.Button.Primary}"
+                Margin="0,20,0,0"
+                Padding="18,7"
                 HorizontalAlignment="Right"
                 Content="完成"
                 Click="OnClose" />
