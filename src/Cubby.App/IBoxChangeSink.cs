@@ -16,4 +16,7 @@ internal interface IBoxChangeSink
 
     /// <summary>要求在资源管理器里定位该条目（右键菜单「打开位置」）。</summary>
     void OnItemReveal(BoxItem item);
+
+    /// <summary>一次桌面图标吸附的结果摘要（右键菜单「吸附桌面图标」）。</summary>
+    void OnAdoptReport(string summary);
 }

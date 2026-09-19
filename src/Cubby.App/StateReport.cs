@@ -26,6 +26,11 @@ internal static class StateReport
             builder.AppendLine($"载入诊断 : {diagnostic}");
         }
 
+        if (manager.LastAdoptSummary is { } adopt)
+        {
+            builder.AppendLine($"吸附结果 : {adopt}");
+        }
+
         builder.AppendLine();
         builder.AppendLine("== 显示器 ==");
         builder.AppendLine(manager.DescribeMonitors());

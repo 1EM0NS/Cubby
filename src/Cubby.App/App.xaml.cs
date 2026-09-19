@@ -51,6 +51,13 @@ public partial class App : Application
             return;
         }
 
+        if (options.DumpDesktopIcons)
+        {
+            Console.WriteLine($"桌面图标报告已写入：{DesktopIconReport.Write(options)}");
+            Shutdown(0);
+            return;
+        }
+
         var layoutPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Cubby",
@@ -61,7 +68,7 @@ public partial class App : Application
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -88,7 +95,9 @@ public partial class App : Application
                             ? await DropTestRunner.RunAsync(overlay, layout, options)
                             : options.Menu
                                 ? await ItemMenuTestRunner.RunAsync(overlay, layout, options)
-                                : await ShellTestRunner.RunAsync(manager, layout, options);
+                                : options.Shell
+                                    ? await ShellTestRunner.RunAsync(manager, layout, options)
+                                    : await AdoptTestRunner.RunAsync(overlay, layout, options);
 
                 Shutdown(exitCode);
             };
@@ -213,7 +222,9 @@ internal sealed record SpikeOptions(
     bool Menu = false,
     bool Shell = false,
     bool Diagnostics = false,
-    bool UninstallAutoStart = false)
+    bool UninstallAutoStart = false,
+    bool DumpDesktopIcons = false,
+    bool Adopt = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -225,7 +236,9 @@ internal sealed record SpikeOptions(
         Menu: Has(args, "--selftest-menu"),
         Shell: Has(args, "--selftest-shell"),
         Diagnostics: Has(args, "--diagnostics"),
-        UninstallAutoStart: Has(args, "--uninstall-autostart"));
+        UninstallAutoStart: Has(args, "--uninstall-autostart"),
+        DumpDesktopIcons: Has(args, "--dump-desktop-icons"),
+        Adopt: Has(args, "--selftest-adopt"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

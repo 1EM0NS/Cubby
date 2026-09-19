@@ -5,6 +5,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Cubby.Core.Layout;
 using Cubby.Core.Model;
+using Cubby.Core.Platform;
+using Cubby.Shell.Desktop;
 
 namespace Cubby.App.Views;
 
@@ -51,6 +53,7 @@ public partial class BoxView : UserControl
         BoxStyle = style.Normalized();
         _surface = surface;
 
+        Root.ContextMenu = BuildBoxMenu();
         Refresh();
     }
 
@@ -62,6 +65,9 @@ public partial class BoxView : UserControl
 
     /// <summary>右键菜单「打开位置」。</summary>
     public event EventHandler<BoxItem>? ItemRevealRequested;
+
+    /// <summary>一次桌面图标吸附的结果摘要，交给宿主记录（诊断面板会显示）。</summary>
+    public event EventHandler<string>? AdoptReported;
 
     public Box Current { get; private set; }
 
@@ -195,6 +201,62 @@ public partial class BoxView : UserControl
     }
 
     // ---- 右键菜单 ----
+
+    /// <summary>盒子自身的右键菜单（条目上的右键菜单是另一套，见 <see cref="BuildItemMenu"/>）。</summary>
+    internal ContextMenu BuildBoxMenu()
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(MenuEntry("吸附盒子范围内的桌面图标", OnAdoptMenuClick));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("重命名盒子", RequestRename));
+
+        return menu;
+    }
+
+    private void OnAdoptMenuClick()
+    {
+        var added = AdoptDesktopIcons();
+
+        // 一条都没吸到时必须给个说法，否则用户只会觉得"菜单点了没反应"
+        if (added == 0)
+        {
+            MessageBox.Show(
+                Window.GetWindow(this),
+                $"{LastAdoptSummary ?? "读取桌面图标失败"}{Environment.NewLine}{Environment.NewLine}" +
+                "提示：吸附只认「图标位置落在盒子矩形内」的项；「此电脑」「回收站」这类虚拟图标不在桌面目录里，匹配不上属于正常。",
+                "Cubby · 吸附桌面图标",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    /// <summary>
+    /// 把位置落在本盒子范围内的桌面图标吸进盒子。
+    /// **全程只读**：读图标位置与名字、读桌面目录清单，然后把匹配到的路径登记为引用（P4）。
+    /// 读不到图标（权限 / Explorer 重启 / 版本差异）时返回 0，整体降级为"不吸附"。
+    /// </summary>
+    internal int AdoptDesktopIcons()
+    {
+        var icons = DesktopIcons.Read();
+        var area = _surface.ToPhysical(Current.Bounds);
+        var candidates = DesktopFolders.EnumerateEntries();
+
+        var plan = DesktopAdoption.Plan(icons, area, candidates);
+        var added = DropImport.Create(plan.MatchedPaths, Current.Items);
+
+        if (added.Count > 0)
+        {
+            Apply(Current with { Items = [.. Current.Items, .. added] });
+        }
+
+        LastAdoptSummary = $"「{Current.Name}」新增 {added.Count} 条；{plan.Describe()}";
+        AdoptReported?.Invoke(this, LastAdoptSummary);
+
+        return added.Count;
+    }
+
+    /// <summary>最近一次吸附的摘要（诊断与自动化验收用）。</summary>
+    internal string? LastAdoptSummary { get; private set; }
 
     /// <summary>条目右键菜单。菜单项本身不做磁盘操作，只把动作转给 <see cref="InvokeItemAction"/>。</summary>
     internal ContextMenu BuildItemMenu(BoxItem item)
