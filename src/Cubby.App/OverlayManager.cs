@@ -22,6 +22,9 @@ internal sealed class OverlayManager : IBoxChangeSink
     private readonly LayoutService _layout;
     private readonly List<OverlayWindow> _windows = [];
 
+    /// <summary>盒子是否可见。重建浮层后要按这个状态恢复，否则显示器一变盒子就自己冒出来。</summary>
+    private bool _boxesVisible = true;
+
     public OverlayManager(LayoutService layout) => _layout = layout;
 
     public IReadOnlyList<OverlayWindow> Windows => _windows;
@@ -71,6 +74,7 @@ internal sealed class OverlayManager : IBoxChangeSink
         {
             // Show 之后才有 HWND，窗口在 OnSourceInitialized 里完成浮层初始化
             window.Show();
+            window.Host?.SetVisible(_boxesVisible);
         }
 
         RebuildCount++;
@@ -84,6 +88,31 @@ internal sealed class OverlayManager : IBoxChangeSink
     {
         CloseAll();
         _layout.SaveNow();
+    }
+
+    /// <summary>盒子当前是否显示。</summary>
+    public bool BoxesVisible => _boxesVisible;
+
+    /// <summary>显示 / 隐藏所有盒子（托盘菜单）。隐藏期间浮层不参与命中测试。</summary>
+    public void SetBoxesVisible(bool visible)
+    {
+        _boxesVisible = visible;
+
+        foreach (var window in _windows)
+        {
+            window.Host?.SetVisible(visible);
+        }
+    }
+
+    /// <summary>把全局样式套用到所有浮层（设置窗口拖动滑块时调用）。</summary>
+    public void ApplyStyle(StyleSettings style)
+    {
+        _layout.UpdateStyle(style);
+
+        foreach (var window in _windows)
+        {
+            window.ChangeStyle(_layout.Style);
+        }
     }
 
     /// <summary>某个窗口句柄是否属于我们的任一浮层（多屏下不能只比一个句柄）。</summary>

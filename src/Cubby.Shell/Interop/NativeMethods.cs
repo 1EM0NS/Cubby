@@ -25,6 +25,18 @@ internal static class NativeMethods
     internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpNoActivate = 0x0010;
     internal const uint SwpShowWindow = 0x0040;
+    internal const uint SwpHideWindow = 0x0080;
+
+    internal const int SwHide = 0;
+    internal const int SwShowNoActivate = 4;
+
+    /// <summary>取进程占用的 GDI / USER 对象数（A7 常驻稳定性验收用）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint GetGuiResources(nint process, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(nint hwnd, int cmdShow);
 
     internal const int RgnOr = 2;
 

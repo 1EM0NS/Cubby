@@ -32,8 +32,8 @@ public partial class HudWindow : Window
 
         Closed += (_, _) =>
         {
+            // 只停自己的刷新定时器：浮层与托盘的存活由 App 统一管，关掉诊断面板不等于退出程序
             _timer.Stop();
-            _manager.Stop();
         };
     }
 
