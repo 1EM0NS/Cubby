@@ -5,6 +5,7 @@ using Cubby.App.Views;
 using Cubby.Core;
 using Cubby.Core.Layout;
 using Cubby.Core.Model;
+using Cubby.Shell.Desktop;
 using Cubby.Shell.Diagnostics;
 using Cubby.Shell.Overlay;
 
@@ -25,9 +26,15 @@ public partial class OverlayWindow : Window
     private const int WmDisplayChange = 0x007E;
     private const int WmDpiChanged = 0x02E0;
 
+    /// <summary>热键 Id，单实例内唯一即可。</summary>
+    private const int HotkeyId = 0x4355;
+
     private readonly List<Box> _boxes;
     private readonly Dictionary<string, BoxView> _views = new();
     private readonly IBoxChangeSink _sink;
+
+    /// <summary>全局热键（Ctrl+Alt+H，切换桌面图标显隐）。只有主屏窗口持有它。</summary>
+    private HotkeyService? _hotkey;
 
     /// <summary>全局样式。设置窗口改样式时会替换它并重绘（因此不是 readonly）。</summary>
     private StyleSettings _style;
@@ -54,6 +61,9 @@ public partial class OverlayWindow : Window
     public event EventHandler<int>? DisplayChanged;
 
     public OverlayHost? Host { get; private set; }
+
+    /// <summary>本窗口持有的全局热键（只有主屏窗口有）。</summary>
+    public HotkeyService? Hotkey => _hotkey;
 
     public MonitorSurface? Surface { get; private set; }
 
@@ -88,11 +98,21 @@ public partial class OverlayWindow : Window
         Host.EnsureBehind();
         Host.StartAutoBehind();
 
+        // 全局热键只在主屏那个窗口注册：多屏时重复注册同一个组合键会失败
+        if (Surface!.IsPrimary)
+        {
+            _hotkey = new HotkeyService(hwnd, HotkeyId, HotkeyService.ModControl | HotkeyService.ModAlt, (uint)'H');
+            _hotkey.Register();
+        }
+
         RenderBoxes();
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _hotkey?.Dispose();
+        _hotkey = null;
+
         // 必须释放：否则每次重建都会残留一组 WinEvent 钩子
         Host?.Dispose();
         Host = null;
@@ -237,6 +257,7 @@ public partial class OverlayWindow : Window
             view.ItemRevealRequested += (_, item) => _sink.OnItemReveal(item);
             view.AdoptReported += (_, summary) => _sink.OnAdoptReport(summary);
             view.SearchRequested += (_, target) => _sink.OnSearchRequested(target);
+            view.DesktopIconToggleRequested += (_, _) => _sink.OnDesktopIconToggleRequested();
 
             Canvas.SetLeft(view, box.Bounds.X);
             Canvas.SetTop(view, box.Bounds.Y);
@@ -303,6 +324,15 @@ public partial class OverlayWindow : Window
             case WmDisplayChange:
             case WmDpiChanged:
                 DisplayChanged?.Invoke(this, msg);
+                break;
+
+            case HotkeyService.WmHotkey:
+                // 只处理我们自己注册的那个 Id（别的窗口发来的热键消息一概不管）
+                if (wParam == HotkeyId)
+                {
+                    _sink.OnDesktopIconToggleRequested();
+                }
+
                 break;
         }
 

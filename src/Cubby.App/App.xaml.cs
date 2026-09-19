@@ -18,6 +18,12 @@ public partial class App : Application
     private SnapshotsWindow? _snapshots;
     private RulesWindow? _rules;
 
+    /// <summary>启动时的桌面图标恢复说明（诊断面板会显示）。</summary>
+    private string _lastDesktopIconRecovery = "（未检查）";
+
+    /// <summary>供验收读取：启动那次"崩溃兜底恢复"的结果。</summary>
+    internal string LastDesktopIconRecovery => _lastDesktopIconRecovery;
+
     public App()
     {
         // 常驻形态下浮层窗口会被反复重建（显示器变化），默认的 OnLastWindowClose 会在
@@ -65,12 +71,16 @@ public partial class App : Application
             "Cubby",
             "layout.json");
 
+        // 崩溃 / 强杀兜底：上次如果留下"图标还是隐藏的"标记，第一件事就是把它放出来。
+        // 这条路径不依赖任何退出代码，因此进程被 taskkill 也能救回来。
+        _lastDesktopIconRecovery = DesktopIconController.RecoverIfLeftHidden();
+
         var layout = new LayoutService(layoutPath);
         var manager = new OverlayManager(layout);
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map || options.Search || options.Rules)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map || options.Search || options.Rules || options.DesktopIcons)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -107,7 +117,9 @@ public partial class App : Application
                                                 ? await MapTestRunner.RunAsync(overlay, layout, manager, options)
                                                 : options.Search
                                                     ? await SearchTestRunner.RunAsync(overlay, layout, manager, options)
-                                                    : await RuleTestRunner.RunAsync(overlay, layout, manager, options);
+                                                    : options.Rules
+                                                        ? await RuleTestRunner.RunAsync(overlay, layout, manager, options)
+                                                        : await DesktopIconTestRunner.RunAsync(overlay, layout, manager, options);
 
                 Shutdown(exitCode);
             };
@@ -143,8 +155,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // 隐藏桌面图标是系统级副作用：退出时无条件还原，否则用户会面对一个空荡荡的桌面
-        DesktopIcons.SetVisible(true);
+        // 隐藏桌面图标是系统级副作用：退出时**只还原我们自己藏的那次**
+        // （用户自己在系统里关掉桌面图标，我们没资格替他打开）。不依赖退出代码的那条兜底见 OnStartup。
+        _lastDesktopIconRecovery = _manager?.DesktopIconToggle.RestoreOnExit() ?? _lastDesktopIconRecovery;
 
         _tray?.Dispose();
         _tray = null;
@@ -169,11 +182,9 @@ public partial class App : Application
 
         tray.DesktopIconsVisibilityRequested += (_, visible) =>
         {
-            // 找不到图标层（Explorer 正在重启）时把勾选状态改回真实状态，不让界面说谎
-            if (!DesktopIcons.SetVisible(visible))
-            {
-                tray.SetDesktopIconsChecked(DesktopIcons.IsVisible());
-            }
+            // 三个入口（托盘 / 热键 / 盒子按钮）都走同一个控制器，藏了要记标记这件事只写一次
+            manager.DesktopIconToggle.SetVisible(visible);
+            tray.SetDesktopIconsChecked(manager.DesktopIconToggle.IsVisible);
         };
 
         tray.AutoStartRequested += (_, enabled) =>
@@ -266,7 +277,8 @@ internal sealed record SpikeOptions(
     bool Snapshot = false,
     bool Map = false,
     bool Search = false,
-    bool Rules = false)
+    bool Rules = false,
+    bool DesktopIcons = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -284,7 +296,8 @@ internal sealed record SpikeOptions(
         Snapshot: Has(args, "--selftest-snapshot"),
         Map: Has(args, "--selftest-map"),
         Search: Has(args, "--selftest-search"),
-        Rules: Has(args, "--selftest-rules"));
+        Rules: Has(args, "--selftest-rules"),
+        DesktopIcons: Has(args, "--selftest-desktop-icons"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

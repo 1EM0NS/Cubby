@@ -125,6 +125,17 @@ internal sealed class LayoutService
         }
     }
 
+    /// <summary>桌面图标显隐的开关（个别 Windows 版本上 ShowWindow 行为不稳，留的降级开关）。</summary>
+    public bool DesktopIconToggleEnabled
+    {
+        get => _document.EnableDesktopIconToggle;
+        set
+        {
+            _document = _document with { EnableDesktopIconToggle = value };
+            SaveLater();
+        }
+    }
+
     /// <summary>创建一份快照，遵守当前的保留策略。</summary>
     public SnapshotInfo CreateSnapshot(string? label = null) =>
         Snapshots.Create(_document, label, _document.SnapshotKeep);

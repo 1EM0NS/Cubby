@@ -110,6 +110,22 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern int MapWindowPoints(nint from, nint to, ref Point points, uint count);
 
+    /// <summary>
+    /// 注册一个全局热键。**这不是钩子**：只拦下指定的这一个组合键，其余按键与鼠标消息一概不碰（P1 无关）。
+    /// </summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint virtualKey);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnregisterHotKey(nint hwnd, int id);
+
+    /// <summary>往自己的窗口投一条消息（验收用它模拟"热键被按下"，不需要真的按键）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostMessage(nint hwnd, int msg, nint wParam, nint lParam);
+
     internal const uint EventSystemForeground = 0x0003;
     internal const uint EventSystemMinimizeStart = 0x0016;
     internal const uint EventSystemMinimizeEnd = 0x0017;

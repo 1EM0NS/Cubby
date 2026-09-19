@@ -83,6 +83,11 @@ public partial class HudWindow : Window
 
         builder.AppendLine($"搜索索引   : {_manager.SearchDescription}");
         builder.AppendLine($"归类规则   : {_manager.Rules.Describe()}");
+        builder.AppendLine(
+            $"桌面图标   : {(_manager.DesktopIconToggle.IsVisible ? "显示中" : "已隐藏")}；" +
+            $"开关={_manager.DesktopIconToggle.IsEnabled}；最近操作 {_manager.DesktopIconToggle.LastAction}");
+        builder.AppendLine(
+            $"热键       : {(_manager.PrimaryWindow?.Hotkey is { } hotkey ? $"{hotkey.Describe()}（已注册={hotkey.IsRegistered}）" : "（未注册）")}");
 
         builder.AppendLine();
         builder.AppendLine("== 盒子 ==");

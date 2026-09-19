@@ -24,6 +24,15 @@
                                    FontWeight="Medium"
                                    TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="DesktopIconButton"
+                                    Width="28"
+                                    Height="24"
+                                    Margin="0,0,4,0"
+                                    Padding="0"
+                                    FontSize="12"
+                                    ToolTip="隐藏 / 显示真实桌面图标（也可以用全局热键）"
+                                    Content="👁"
+                                    Click="OnToggleDesktopIcons" />
                             <Button x:Name="SearchButton"
                                     Width="28"
                                     Height="24"

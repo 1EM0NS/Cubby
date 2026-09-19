@@ -37,12 +37,19 @@ internal sealed class OverlayManager : IBoxChangeSink
     /// <summary>自动归类的规则宿主（规则在 Core 里算，这里只落引用）。</summary>
     private readonly RuleService _rules;
 
+    /// <summary>桌面图标显隐的唯一入口（托盘 / 热键 / 盒子按钮都走它）。</summary>
+    private readonly DesktopIconController _desktopIcons;
+
     public OverlayManager(LayoutService layout)
     {
         _layout = layout;
         _mapping = new MappedFolderService(layout, ApplyBoxUpdate);
         _rules = new RuleService(layout, ApplyBoxUpdate, () => _layout.Boxes.FirstOrDefault()?.Id);
+        _desktopIcons = new DesktopIconController(layout);
     }
+
+    /// <summary>桌面图标控制器。</summary>
+    public DesktopIconController DesktopIconToggle => _desktopIcons;
 
     /// <summary>归类规则（界面与验收都用它）。</summary>
     public RuleService Rules => _rules;
@@ -236,6 +243,9 @@ internal sealed class OverlayManager : IBoxChangeSink
     }
 
     public void OnAdoptReport(string summary) => LastAdoptSummary = summary;
+
+    /// <summary>盒子标题栏按钮 / 全局热键都汇到这里，保证"藏了要记标记"这件事只写一次。</summary>
+    public void OnDesktopIconToggleRequested() => _desktopIcons.Toggle();
 
     /// <summary>打开某个盒子的搜索窗口。同一个盒子只开一个，重复点就激活已有的那个。</summary>
     public void OnSearchRequested(Box box)

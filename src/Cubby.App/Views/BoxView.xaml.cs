@@ -70,6 +70,9 @@ public partial class BoxView : UserControl
     /// <summary>一次桌面图标吸附的结果摘要，交给宿主记录（诊断面板会显示）。</summary>
     public event EventHandler<string>? AdoptReported;
 
+    /// <summary>请求切换桌面图标的显隐（标题栏 👁）。</summary>
+    public event EventHandler? DesktopIconToggleRequested;
+
     /// <summary>请求打开这个盒子的搜索窗口（标题栏 🔍 或右键菜单）。</summary>
     public event EventHandler<Box>? SearchRequested;
 
@@ -214,6 +217,7 @@ public partial class BoxView : UserControl
         menu.Items.Add(MenuEntry("吸附盒子范围内的桌面图标", OnAdoptMenuClick));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry("搜索条目…", RequestSearch));
+        menu.Items.Add(MenuEntry("隐藏 / 显示桌面图标", () => OnToggleDesktopIcons(this, new RoutedEventArgs())));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry("映射文件夹…", OnMapFolderMenuClick));
         menu.Items.Add(MenuEntry("解除映射", OnUnmapFolderMenuClick));
@@ -658,6 +662,9 @@ public partial class BoxView : UserControl
     internal void RequestSearch() => SearchRequested?.Invoke(this, Current);
 
     private void OnSearch(object sender, RoutedEventArgs e) => RequestSearch();
+
+    private void OnToggleDesktopIcons(object sender, RoutedEventArgs e) =>
+        DesktopIconToggleRequested?.Invoke(this, EventArgs.Empty);
 
     private void RequestRename()
     {

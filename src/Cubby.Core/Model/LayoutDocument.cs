@@ -27,4 +27,10 @@ public sealed record LayoutDocument
 
     /// <summary>仅快照文件会写入：创建这份快照时用户给的标签。</summary>
     public string? SnapshotLabel { get; init; }
+
+    /// <summary>
+    /// 是否允许切换桌面图标显隐。默认开；关掉后托盘菜单 / 热键 / 盒子按钮都不生效。
+    /// （SysListView32 的 ShowWindow 在个别 Windows 版本上行为不稳，留这个开关做降级。）
+    /// </summary>
+    public bool EnableDesktopIconToggle { get; init; } = true;
 }
