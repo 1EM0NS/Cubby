@@ -115,6 +115,7 @@ public partial class App : Application
                     { Rules: true } => await RuleTestRunner.RunAsync(overlay, layout, manager, options),
                     { DesktopIcons: true } => await DesktopIconTestRunner.RunAsync(overlay, layout, manager, options),
                     { Appearance: true } => await AppearanceTestRunner.RunAsync(overlay, layout, options),
+                    { Coexist: true } => await CoexistTestRunner.RunAsync(layout, options),
                     _ => 0,
                 };
 
@@ -143,6 +144,10 @@ public partial class App : Application
         }
 
         StartTray(manager, layout);
+
+        // A8：与同类桌面整理软件共存。**只提示、不抢占**；检测只在启动时做一次，不轮询。
+        // 放在托盘之后：这样即使用户直接关掉提示，程序也已经在正常常驻了。
+        CoexistNotice.ShowIfNeeded(layout);
 
         if (options.Diagnostics)
         {
@@ -276,11 +281,12 @@ internal sealed record SpikeOptions(
     bool Search = false,
     bool Rules = false,
     bool DesktopIcons = false,
-    bool Appearance = false)
+    bool Appearance = false,
+    bool Coexist = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
-        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance;
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist;
 
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -300,7 +306,8 @@ internal sealed record SpikeOptions(
         Search: Has(args, "--selftest-search"),
         Rules: Has(args, "--selftest-rules"),
         DesktopIcons: Has(args, "--selftest-desktop-icons"),
-        Appearance: Has(args, "--selftest-appearance"));
+        Appearance: Has(args, "--selftest-appearance"),
+        Coexist: Has(args, "--selftest-coexist"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

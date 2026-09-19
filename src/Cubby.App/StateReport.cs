@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using Cubby.Core.Model;
+using Cubby.Core.Platform;
 using Cubby.Shell.Diagnostics;
 
 namespace Cubby.App;
@@ -38,6 +39,10 @@ internal static class StateReport
 
         builder.AppendLine($"搜索索引 : {manager.SearchDescription}");
         builder.AppendLine($"归类规则 : {manager.Rules.Describe()}");
+        builder.AppendLine($"同类软件 : {CoexistTools.Describe(CoexistTools.DetectRunning())}" +
+                           (layout.CoexistAcknowledged.Count == 0
+                               ? string.Empty
+                               : $"；已确认不再提示：{string.Join("、", layout.CoexistAcknowledged)}"));
         builder.AppendLine(
             $"桌面图标 : {(manager.DesktopIconToggle.IsVisible ? "显示中" : "已隐藏")}；" +
             $"开关={manager.DesktopIconToggle.IsEnabled}；最近操作 {manager.DesktopIconToggle.LastAction}");

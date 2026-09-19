@@ -136,6 +136,34 @@ internal sealed class LayoutService
         }
     }
 
+    /// <summary>用户已确认过的同类软件（A8）。</summary>
+    public IReadOnlyList<string> CoexistAcknowledged => _document.CoexistAcknowledgedTools;
+
+    /// <summary>记住用户已经确认过这些同类软件，下次不再打扰。</summary>
+    public void AcknowledgeCoexist(IEnumerable<string> processNames)
+    {
+        var merged = _document.CoexistAcknowledgedTools
+            .Concat(processNames)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (merged.Count == _document.CoexistAcknowledgedTools.Count)
+        {
+            return;
+        }
+
+        _document = _document with { CoexistAcknowledgedTools = merged };
+        SaveLater();
+    }
+
+    /// <summary>把已确认清单恢复成指定内容（自动化验收用来还原现场）。</summary>
+    public void RestoreCoexistAcknowledged(IReadOnlyList<string> processNames)
+    {
+        _document = _document with { CoexistAcknowledgedTools = [.. processNames] };
+        SaveLater();
+    }
+
     /// <summary>创建一份快照，遵守当前的保留策略。</summary>
     public SnapshotInfo CreateSnapshot(string? label = null) =>
         Snapshots.Create(_document, label, _document.SnapshotKeep);

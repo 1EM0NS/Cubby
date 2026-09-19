@@ -82,6 +82,39 @@ public sealed class LayoutStoreTests : IDisposable
         Assert.Contains("SavedAt", json);
     }
 
+    /// <summary>
+    /// A8 的「已确认不再提示」清单必须跟着布局一起存下来，否则每次启动都会重新弹一遍提示。
+    /// 顺序与去重不需要在这里保证（由 LayoutService 负责），存读必须可靠。
+    /// </summary>
+    [Fact]
+    public void 已确认的同类软件清单能原样读回()
+    {
+        var store = new LayoutStore(_filePath);
+
+        store.Save(SampleDocument() with { CoexistAcknowledgedTools = ["DeskGo", "Fences"] });
+        var loaded = store.Load();
+
+        Assert.Equal(["DeskGo", "Fences"], loaded.CoexistAcknowledgedTools);
+    }
+
+    /// <summary>老配置文件里没有这个字段时，读出来应当是空清单而不是 null——否则启动路径会空引用。</summary>
+    [Fact]
+    public void 缺少同类软件字段的旧配置读出来是空清单()
+    {
+        var store = new LayoutStore(_filePath);
+        store.Save(SampleDocument());
+
+        var json = File.ReadAllText(_filePath)
+            .Replace("  \"CoexistAcknowledgedTools\": [],", string.Empty, StringComparison.Ordinal);
+        File.WriteAllText(_filePath, json);
+
+        var loaded = store.Load();
+
+        Assert.Null(store.LastLoadDiagnostic);
+        Assert.NotNull(loaded.CoexistAcknowledgedTools);
+        Assert.Empty(loaded.CoexistAcknowledgedTools);
+    }
+
     [Fact]
     public void 覆盖保存会留下备份且不留临时文件()
     {
