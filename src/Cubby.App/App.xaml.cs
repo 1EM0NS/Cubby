@@ -16,6 +16,7 @@ public partial class App : Application
     private TrayIcon? _tray;
     private SettingsWindow? _settings;
     private SnapshotsWindow? _snapshots;
+    private RulesWindow? _rules;
 
     public App()
     {
@@ -69,7 +70,7 @@ public partial class App : Application
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map || options.Search)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map || options.Search || options.Rules)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -104,7 +105,9 @@ public partial class App : Application
                                             ? await SnapshotTestRunner.RunAsync(manager, layout, options)
                                             : options.Map
                                                 ? await MapTestRunner.RunAsync(overlay, layout, manager, options)
-                                                : await SearchTestRunner.RunAsync(overlay, layout, manager, options);
+                                                : options.Search
+                                                    ? await SearchTestRunner.RunAsync(overlay, layout, manager, options)
+                                                    : await RuleTestRunner.RunAsync(overlay, layout, manager, options);
 
                 Shutdown(exitCode);
             };
@@ -181,6 +184,7 @@ public partial class App : Application
 
         tray.SettingsRequested += (_, _) => ShowSettings(manager, layout);
         tray.SnapshotsRequested += (_, _) => ShowSnapshots(manager, layout);
+        tray.RulesRequested += (_, _) => ShowRules(manager);
         tray.ExitRequested += (_, _) => Shutdown();
     }
 
@@ -210,6 +214,19 @@ public partial class App : Application
         _snapshots = new SnapshotsWindow(layout, manager);
         _snapshots.Closed += (_, _) => _snapshots = null;
         _snapshots.Show();
+    }
+
+    private void ShowRules(OverlayManager manager)
+    {
+        if (_rules is { IsLoaded: true })
+        {
+            _rules.Activate();
+            return;
+        }
+
+        _rules = new RulesWindow(manager.Rules);
+        _rules.Closed += (_, _) => _rules = null;
+        _rules.Show();
     }
 
     /// <summary>把未处理异常写到 artifacts/crash.log（M3 做正式崩溃日志时会统一搬到 %AppData%）。</summary>
@@ -248,7 +265,8 @@ internal sealed record SpikeOptions(
     bool Adopt = false,
     bool Snapshot = false,
     bool Map = false,
-    bool Search = false)
+    bool Search = false,
+    bool Rules = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -265,7 +283,8 @@ internal sealed record SpikeOptions(
         Adopt: Has(args, "--selftest-adopt"),
         Snapshot: Has(args, "--selftest-snapshot"),
         Map: Has(args, "--selftest-map"),
-        Search: Has(args, "--selftest-search"));
+        Search: Has(args, "--selftest-search"),
+        Rules: Has(args, "--selftest-rules"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

@@ -34,11 +34,18 @@ internal sealed class OverlayManager : IBoxChangeSink
     /// <summary>每个盒子最多开一个搜索窗口。</summary>
     private readonly Dictionary<string, SearchWindow> _searchWindows = new(StringComparer.Ordinal);
 
+    /// <summary>自动归类的规则宿主（规则在 Core 里算，这里只落引用）。</summary>
+    private readonly RuleService _rules;
+
     public OverlayManager(LayoutService layout)
     {
         _layout = layout;
         _mapping = new MappedFolderService(layout, ApplyBoxUpdate);
+        _rules = new RuleService(layout, ApplyBoxUpdate, () => _layout.Boxes.FirstOrDefault()?.Id);
     }
+
+    /// <summary>归类规则（界面与验收都用它）。</summary>
+    public RuleService Rules => _rules;
 
     /// <summary>搜索索引状态（诊断面板与状态报告）。</summary>
     public string SearchDescription => _search.Describe();
