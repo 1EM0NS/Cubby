@@ -42,7 +42,7 @@ public partial class App : Application
         var manager = new OverlayManager(layout);
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -65,7 +65,9 @@ public partial class App : Application
                     ? await SelfTestRunner.RunAsync(overlay, options)
                     : options.Interact
                         ? await InteractionTestRunner.RunAsync(overlay, layout, options)
-                        : await DropTestRunner.RunAsync(overlay, layout, options);
+                        : options.Drop
+                            ? await DropTestRunner.RunAsync(overlay, layout, options)
+                            : await ItemMenuTestRunner.RunAsync(overlay, layout, options);
 
                 Shutdown(exitCode);
             };
@@ -115,7 +117,7 @@ public partial class App : Application
 }
 
 /// <summary>命令行参数。</summary>
-internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact, bool Drop = false)
+internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact, bool Drop = false, bool Menu = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -123,7 +125,8 @@ internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool
         DumpMonitors: Has(args, "--dump-monitors"),
         DumpState: Has(args, "--dump-state"),
         Interact: Has(args, "--selftest-interact"),
-        Drop: Has(args, "--selftest-drop"));
+        Drop: Has(args, "--selftest-drop"),
+        Menu: Has(args, "--selftest-menu"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
