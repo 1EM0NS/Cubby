@@ -47,17 +47,17 @@
   → **结论：给 `gh` 传中文内容一律用 `--body-file` 传文件；`.ps1` 存盘时带 BOM。**
 - 本机没装 `pwsh`（PowerShell 7），CI 的 `windows-latest` 上有。
 - **⚠️ `git pull` / `git checkout` 会丢文件，务必用免沙箱的方式跑，跑完立刻数文件数。**
-  2026-09-20 连撞两次：`git pull` 之后 `git status` 把 `src/**` 下 97 个文件报成 ` D`，
+  2026-09-20 连撞三次：`git pull` 之后 `git status` 把 `src/**` 下 97 个文件报成 ` D`，
   而 `HEAD` 与索引都是完整的——**这是真的丢了工作区文件**，不是索引脏。
-  沙箱里的命令要写很多文件时会静默失败一部分。
+  **注意：第三次是免沙箱跑的，所以根因不是沙箱**，就是这台机器上 `git pull` 的批量检出会静默失败一部分。
   收尾动作固定成这三步（最后一步是硬要求，不是可选）：
   ```bash
   git switch main && git pull
   git status --short                 # 不该出现成片的 " D "
   ls src/Cubby.App | wc -l           # 应该 50 上下；只剩个位数就是丢了
   ```
-  真丢了就 `git restore --worktree .`（免沙箱）——索引 == HEAD，内容无损。
-  别用 `git checkout -- .` 之外的破坏性命令，也别 `git add` 之后才发现在删文件。
+  真丢了就 `git restore --worktree .`——索引 == HEAD，内容无损。
+  别用破坏性命令，也别 `git add -A` 把删文件当成改动提交上去。
 - **`gh pr merge --squash --delete-branch` 不会自动切回本地 `main`**：合并后本地仍停在已被删除的分支上，紧接着 `git pull` 会报 `no such ref was fetched`，很容易误判为"合并失败"。
   → 判断合并结果一律以 `gh pr view <编号> --json state,mergedAt` 为准，**不要看 git 本地状态**。收尾动作：`git switch main && git pull && git branch -D <分支>`。
 
@@ -123,6 +123,26 @@ gh issue list --repo 1EM0NS/Cubby --limit 30
   报告里两个数都会列出、工作集单独标 ⚠。若判定要改成按工作集口径，把
   `SoakAnalysis` 里那一项的 `Gating` 改成 `true`，`--selftest-soak` 会立刻变 FAIL。
 
+### 安装 / 卸载与无残留验收（`scripts/`）
+
+```powershell
+# 装到 %LocalAppData%\Programs\Cubby（免管理员：只写 HKCU 与 %LocalAppData%）
+.\scripts\install.ps1                    # -AutoStart 一并注册自启；-Source 指定产物目录
+.\scripts\uninstall.ps1                  # 默认**保留**用户数据；-PurgeUserData 才删；-Quiet 不询问
+.\scripts\verify-install.ps1             # 无残留验收：装 → 断言 → 卸 → 断言零残留 → 重装幂等
+```
+
+- 报告写 `artifacts/install-report.md`（该目录被 gitignore）。
+- 零残留清单五项：安装目录、开始菜单快捷方式、`HKCU\...\Run` 的 `Cubby`、`HKCU\...\Uninstall\Cubby`、
+  `%AppData%\Cubby\desktop-icons-hidden.flag`。
+- **卸载顺序是硬要求**：先 `Cubby.App.exe --restore-on-exit`（还原图标 + 摘自启）→ 再删文件。
+  反了就没救：exe 都没了，没人能执行恢复逻辑。
+- 三个脚本必须存成 **UTF-8 带 BOM**，否则 PowerShell 5.1 会把中文按 ANSI 解析、直接报语法错误
+  （现在都有 BOM，改的时候别弄丢）。
+- 脚本里**不要用 `reg.exe`**（本机被安全策略列入黑名单），用 PowerShell 的注册表提供程序
+  （`Get-ItemProperty -LiteralPath 'HKCU:\...'`）；创建快捷方式用 `WScript.Shell` COM，
+  **不要用 `Add-Type`**（编译式加载会被拦）。
+
 ### Cubby 自带的自动化验收（报告都写到 `artifacts/`）
 
 ```powershell
@@ -151,6 +171,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）
 & $app --diagnostics           # 常驻托盘 + 打开诊断面板
 & $app                         # 无参 = 常驻形态（只有托盘图标，不占任务栏）
+& $app --restore-on-exit       # 卸载前的收尾：还原桌面图标标记 + 移除开机自启，然后退出（幂等）
 
 # 窗口链置底断言（A4）
 .\tools\ZOrderProbe\bin\Release\net8.0-windows\ZOrderProbe.exe --assert-behind --exe Cubby.App --title "Cubby 浮层"
