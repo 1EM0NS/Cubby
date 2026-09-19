@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="0.1.0.0" name="Cubby.App" />
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- 每显示器 DPI 感知 v2：多屏不同缩放时坐标才不会漂（见 技术方案.md 第 4 章） -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>

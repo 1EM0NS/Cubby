@@ -1,0 +1,19 @@
+<Project>
+
+  <!-- 全解决方案共用的编译约定 -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- 进程固定 x64：与 Explorer 同位宽才能做桌面图标层通信（见 技术方案.md 第 4 章） -->
+    <PlatformTarget>x64</PlatformTarget>
+
+    <Product>Cubby</Product>
+    <Company>Cubby</Company>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>
