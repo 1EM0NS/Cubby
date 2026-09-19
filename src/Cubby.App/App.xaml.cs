@@ -15,6 +15,7 @@ public partial class App : Application
     private OverlayManager? _manager;
     private TrayIcon? _tray;
     private SettingsWindow? _settings;
+    private SnapshotsWindow? _snapshots;
 
     public App()
     {
@@ -68,7 +69,7 @@ public partial class App : Application
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -97,7 +98,9 @@ public partial class App : Application
                                 ? await ItemMenuTestRunner.RunAsync(overlay, layout, options)
                                 : options.Shell
                                     ? await ShellTestRunner.RunAsync(manager, layout, options)
-                                    : await AdoptTestRunner.RunAsync(overlay, layout, options);
+                                    : options.Adopt
+                                        ? await AdoptTestRunner.RunAsync(overlay, layout, options)
+                                        : await SnapshotTestRunner.RunAsync(manager, layout, options);
 
                 Shutdown(exitCode);
             };
@@ -173,6 +176,7 @@ public partial class App : Application
         };
 
         tray.SettingsRequested += (_, _) => ShowSettings(manager, layout);
+        tray.SnapshotsRequested += (_, _) => ShowSnapshots(manager, layout);
         tray.ExitRequested += (_, _) => Shutdown();
     }
 
@@ -189,6 +193,19 @@ public partial class App : Application
         _settings = new SettingsWindow(current, manager.ApplyStyle);
         _settings.Closed += (_, _) => _settings = null;
         _settings.Show();
+    }
+
+    private void ShowSnapshots(OverlayManager manager, LayoutService layout)
+    {
+        if (_snapshots is { IsLoaded: true })
+        {
+            _snapshots.Activate();
+            return;
+        }
+
+        _snapshots = new SnapshotsWindow(layout, manager);
+        _snapshots.Closed += (_, _) => _snapshots = null;
+        _snapshots.Show();
     }
 
     /// <summary>把未处理异常写到 artifacts/crash.log（M3 做正式崩溃日志时会统一搬到 %AppData%）。</summary>
@@ -224,7 +241,8 @@ internal sealed record SpikeOptions(
     bool Diagnostics = false,
     bool UninstallAutoStart = false,
     bool DumpDesktopIcons = false,
-    bool Adopt = false)
+    bool Adopt = false,
+    bool Snapshot = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -238,7 +256,8 @@ internal sealed record SpikeOptions(
         Diagnostics: Has(args, "--diagnostics"),
         UninstallAutoStart: Has(args, "--uninstall-autostart"),
         DumpDesktopIcons: Has(args, "--dump-desktop-icons"),
-        Adopt: Has(args, "--selftest-adopt"));
+        Adopt: Has(args, "--selftest-adopt"),
+        Snapshot: Has(args, "--selftest-snapshot"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

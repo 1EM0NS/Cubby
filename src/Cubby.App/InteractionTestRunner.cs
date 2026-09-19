@@ -40,6 +40,33 @@ internal static class InteractionTestRunner
             }
             else
             {
+                // 先归一化被测盒子的初始状态。
+                // 折叠会让缩放手柄消失、锁定会让拖动与缩放失效，而这些都是**用户会保存下来的正常状态**；
+                // 更麻烦的是：上一次验收若在还原之前被杀（开发时会），磁盘上就会留下一个折叠盒子，
+                // 于是后续每一次验收都会莫名其妙地失败。验收不该依赖用户当下的状态。
+                var normalized = box with
+                {
+                    IsCollapsed = false,
+                    IsLocked = false,
+                    Bounds = box.Bounds with
+                    {
+                        Width = Math.Max(320, box.Bounds.Width),
+                        Height = Math.Max(260, box.Bounds.Height),
+                    },
+                };
+
+                overlay.UpdateBoxes(originals.Select(b => b.Id == box.Id ? normalized : b).ToList());
+                box = normalized;
+
+                results.Add((
+                    "准备：把被测盒子归一化为展开 / 未锁定 / 尺寸不小于 320×260",
+                    !box.IsCollapsed && !box.IsLocked,
+                    $"原始状态 折叠={originals.First(b => b.Id == box.Id).IsCollapsed} / " +
+                    $"锁定={originals.First(b => b.Id == box.Id).IsLocked} / " +
+                    $"尺寸 {originals.First(b => b.Id == box.Id).Bounds.Width:0}×{originals.First(b => b.Id == box.Id).Bounds.Height:0}"));
+
+                await Task.Delay(200);
+
                 var scale = surface.DpiScale;
                 var originX = surface.Bounds.Left;
                 var originY = surface.Bounds.Top;
@@ -48,9 +75,22 @@ internal static class InteractionTestRunner
 
                 int PhysY(double dipY) => originY + (int)Math.Round(dipY * scale);
 
+                // 会话 8 的教训：浮层按设计在应用窗口之下，若桌面上有别的置顶窗口压住盒子，
+                // 注入的点击会（正确地）落到那个窗口上，测试就假失败。
+                // 所以每一步之前都先确认"这个点真的归我们"，并把占用者写进报告——
+                // 否则只会看到一个莫名其妙的 FAIL。
+                string PointOwner(int x, int y)
+                {
+                    var probe = DesktopProbe.WindowAt(x, y, 0);
+                    return DesktopProbe.BelongsTo(probe.Handle, host.Handle)
+                        ? "浮层"
+                        : $"{probe.ClassName}「{probe.Title}」(pid {probe.ProcessId})";
+                }
+
                 // 1. 拖动标题栏移动
                 var grabX = PhysX(box.Bounds.X + 120);
                 var grabY = PhysY(box.Bounds.Y + (BoxGeometry.TitleBarHeight / 2));
+                var grabOwner = PointOwner(grabX, grabY);
                 await MouseClicker.DragAsync(grabX, grabY, grabX - 40, grabY + 300);
                 await Task.Delay(250);
 
@@ -60,11 +100,12 @@ internal static class InteractionTestRunner
                 results.Add((
                     "拖动标题栏移动盒子",
                     Math.Abs(afterMove.Bounds.X - expectX) <= Tolerance && Math.Abs(afterMove.Bounds.Y - expectY) <= Tolerance,
-                    $"({afterMove.Bounds.X:0},{afterMove.Bounds.Y:0}) 期望 ({expectX:0},{expectY:0})"));
+                    $"({afterMove.Bounds.X:0},{afterMove.Bounds.Y:0}) 期望 ({expectX:0},{expectY:0})；抓取点命中 {grabOwner}"));
 
                 // 2. 拖动右下角手柄缩放
                 var gripX = PhysX(afterMove.Bounds.X + afterMove.Bounds.Width) - 6;
                 var gripY = PhysY(afterMove.Bounds.Y + afterMove.Bounds.Height) - 6;
+                var gripOwner = PointOwner(gripX, gripY);
                 await MouseClicker.DragAsync(gripX, gripY, gripX + 80, gripY + 60);
                 await Task.Delay(250);
 
@@ -73,11 +114,14 @@ internal static class InteractionTestRunner
                     "拖动右下角手柄缩放",
                     Math.Abs(afterResize.Bounds.Width - (afterMove.Bounds.Width + (80 / scale))) <= Tolerance &&
                     Math.Abs(afterResize.Bounds.Height - (afterMove.Bounds.Height + (60 / scale))) <= Tolerance,
-                    $"{afterResize.Bounds.Width:0}×{afterResize.Bounds.Height:0}"));
+                    $"{afterResize.Bounds.Width:0}×{afterResize.Bounds.Height:0}；抓取点 ({gripX},{gripY}) 命中 {gripOwner}"));
 
                 // 3. 点击折叠按钮
                 var titleY = PhysY(afterResize.Bounds.Y + (BoxGeometry.TitleBarHeight / 2));
                 var collapseX = PhysX(afterResize.Bounds.X + afterResize.Bounds.Width - 22);
+                var collapseOwner = PointOwner(collapseX, titleY);
+                var clickBefore = overlay.OverlayClickCount;
+                var wpfBefore = overlay.WpfMouseDownCount;
                 await MouseClicker.DragAsync(collapseX, titleY, collapseX, titleY, steps: 1);
                 await Task.Delay(250);
 
@@ -85,7 +129,9 @@ internal static class InteractionTestRunner
                 results.Add((
                     "点击折叠按钮",
                     afterCollapse.IsCollapsed && Math.Abs(afterCollapse.Bounds.Height - afterResize.Bounds.Height) <= Tolerance,
-                    $"折叠={afterCollapse.IsCollapsed}，模型高度仍为 {afterCollapse.Bounds.Height:0}"));
+                    $"折叠={afterCollapse.IsCollapsed}，模型高度仍为 {afterCollapse.Bounds.Height:0}；" +
+                    $"点击点 ({collapseX},{titleY}) 命中 {collapseOwner}；" +
+                    $"Win32 左键 +{overlay.OverlayClickCount - clickBefore}、WPF +{overlay.WpfMouseDownCount - wpfBefore}"));
 
                 // 4. 点击锁定按钮
                 var lockX = PhysX(afterCollapse.Bounds.X + afterCollapse.Bounds.Width - 54);
@@ -121,6 +167,9 @@ internal static class InteractionTestRunner
             }
 
             layout.SaveNow();
+
+            // 内存里的浮层也要还原：验收把它归一化过（展开 / 未锁定 / 改过尺寸）
+            overlay.UpdateBoxes(originals);
 
             WindowPlacement.SetTopmost(host.Handle, false);
             host.ResumeAutoBehind();

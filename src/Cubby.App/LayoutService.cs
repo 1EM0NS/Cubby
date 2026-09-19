@@ -24,11 +24,20 @@ internal sealed class LayoutService
         _store = new LayoutStore(filePath);
         _document = _store.Load();
 
+        var directory = Path.GetDirectoryName(filePath);
+        Snapshots = new SnapshotStore(Path.Combine(directory ?? AppContext.BaseDirectory, "snapshots"));
+
         _saveTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = SaveDelay };
         _saveTimer.Tick += (_, _) => SaveNow();
     }
 
     public string FilePath => _store.FilePath;
+
+    /// <summary>快照目录与读写（与 layout.json 同一套序列化与版本校验）。</summary>
+    public SnapshotStore Snapshots { get; }
+
+    /// <summary>当前内存里的完整布局文档。快照与还原都需要它，而不只是盒子列表。</summary>
+    public LayoutDocument Document => _document;
 
     /// <summary>上次读取布局时发现的问题（正常为 null）。</summary>
     public string? LoadDiagnostic => _store.LastLoadDiagnostic;
@@ -103,6 +112,37 @@ internal sealed class LayoutService
     {
         _saveTimer.Stop();
         _saveTimer.Start();
+    }
+
+    /// <summary>快照保留份数（0 表示不自动清理）。</summary>
+    public int SnapshotKeep
+    {
+        get => _document.SnapshotKeep;
+        set
+        {
+            _document = _document with { SnapshotKeep = Math.Max(0, value) };
+            SaveLater();
+        }
+    }
+
+    /// <summary>创建一份快照，遵守当前的保留策略。</summary>
+    public SnapshotInfo CreateSnapshot(string? label = null) =>
+        Snapshots.Create(_document, label, _document.SnapshotKeep);
+
+    /// <summary>
+    /// 用一份快照整体替换当前布局并立即落盘（还原）。
+    /// 只改 Cubby 自己的配置文件，不碰任何用户文件（P4）。
+    /// </summary>
+    public void Apply(LayoutDocument document)
+    {
+        _saveTimer.Stop();
+        _document = document with
+        {
+            SchemaVersion = LayoutSchema.CurrentVersion,
+            SavedAt = null,
+        };
+
+        SaveNow();
     }
 
     public void SaveNow()
