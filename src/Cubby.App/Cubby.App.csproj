@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Cubby.App</RootNamespace>
+    <AssemblyName>Cubby.App</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 无参启动 = 交互式 spike；带 selftest 参数 = 自动化命中测试后退出 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cubby.Core\Cubby.Core.csproj" />
+    <ProjectReference Include="..\Cubby.Shell\Cubby.Shell.csproj" />
+  </ItemGroup>
+
+</Project>

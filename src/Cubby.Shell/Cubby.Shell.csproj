@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Cubby.Shell</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <!-- 不引用任何 UI 框架：只操作窗口句柄，便于被 WPF/WinUI/测试共用 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cubby.Core\Cubby.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Window x:Class="Cubby.App.SpikeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cubby 浮层"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Left="0"
+        Top="0"
+        Width="800"
+        Height="600">
+    <!-- 这个窗口就是被测对象：整窗透明，只有盒子区域参与命中测试 -->
+    <Canvas x:Name="BoxLayer" />
+</Window>
