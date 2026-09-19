@@ -52,12 +52,13 @@ internal static class Program
 
         if (asJson)
         {
+            // 显式投影一次：WindowInfo 里的句柄是 nint，System.Text.Json 不支持直接序列化它
             Console.WriteLine(JsonSerializer.Serialize(
                 new
                 {
                     timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    topLevelWindows = snapshot,
-                    desktopLayerChain = desktopChain,
+                    topLevelWindows = snapshot.Select(Project),
+                    desktopLayerChain = desktopChain.Select(Project),
                     targetPid,
                 },
                 new JsonSerializerOptions { WriteIndented = true }));
@@ -80,6 +81,16 @@ internal static class Program
 
         return AssertBehind(snapshot, targetPid.Value, targetTitle);
     }
+
+    private static object Project(WindowInfo info) => new
+    {
+        Handle = info.Handle.ToInt64(),
+        ClassName = info.ClassName,
+        Title = info.Title,
+        ProcessId = info.ProcessId,
+        Bounds = info.Bounds.ToString(),
+        IsVisible = info.IsVisible,
+    };
 
     private static void PrintHuman(
         IReadOnlyList<WindowInfo> snapshot,

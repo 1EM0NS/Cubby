@@ -12,14 +12,14 @@ namespace Cubby.App;
 /// </summary>
 public partial class HudWindow : Window
 {
-    private readonly SpikeWindow _overlay;
+    private readonly OverlayManager _manager;
     private readonly DispatcherTimer _timer;
     private HitMode _mode = HitMode.PerPixelAlpha;
 
-    public HudWindow(SpikeWindow overlay)
+    internal HudWindow(OverlayManager manager)
     {
         InitializeComponent();
-        _overlay = overlay;
+        _manager = manager;
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -28,19 +28,32 @@ public partial class HudWindow : Window
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
 
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _manager.Stop();
+        };
     }
 
     private void Refresh()
     {
-        var hwnd = _overlay.Host?.Handle ?? 0;
-        if (hwnd == 0)
+        var overlay = _manager.PrimaryWindow;
+        var builder = new StringBuilder();
+
+        builder.AppendLine("== 显示器 ==");
+        builder.AppendLine(_manager.DescribeMonitors());
+        builder.AppendLine($"浮层窗口数：{_manager.Windows.Count}");
+        builder.AppendLine($"重建次数：{_manager.RebuildCount}    最近一次：{_manager.LastRebuildReason} @ {_manager.LastRebuildAt ?? "(无)"}");
+        builder.AppendLine();
+
+        if (overlay?.Host is null || overlay.Surface is null)
         {
-            DiagText.Text = "浮层尚未初始化";
+            builder.AppendLine("（主屏浮层尚未初始化）");
+            DiagText.Text = builder.ToString();
             return;
         }
 
-        var surface = _overlay.Surface!;
+        var hwnd = overlay.Host.Handle;
         var info = DesktopProbe.Describe(hwnd);
         var snapshot = DesktopProbe.ZOrderSnapshot(400);
         var index = -1;
@@ -53,29 +66,34 @@ public partial class HudWindow : Window
             }
         }
 
-        var builder = new StringBuilder();
+        builder.AppendLine($"== 主屏浮层（{overlay.Surface.Id}）==");
         builder.AppendLine($"命中模式     : {DescribeMode(_mode)}");
-        builder.AppendLine($"浮层窗口     : 0x{hwnd.ToInt64():X8}");
-        builder.AppendLine($"浮层可见     : {info?.IsVisible}");
+        builder.AppendLine($"窗口句柄     : 0x{hwnd.ToInt64():X8}");
+        builder.AppendLine($"可见         : {info?.IsVisible}");
         builder.AppendLine($"Z 序序号     : {index} / 共 {snapshot.Count} 个可见顶层窗口（0 为最顶层）");
-        builder.AppendLine($"置底触发次数 : {_overlay.Host!.EnsureBehindCount}");
-        builder.AppendLine($"区域设置次数 : {_overlay.Host.RegionApplyCount}");
-        builder.AppendLine($"浮层收到左键 : {_overlay.OverlayClickCount}    右键：{_overlay.OverlayRightClickCount}");
-        builder.AppendLine($"显示器       : {surface.Bounds}  DPI 缩放 {surface.DpiScale:0.##}");
-        builder.AppendLine($"命中区域     : {_overlay.DescribeRegions()}");
+        builder.AppendLine($"置底触发次数 : {overlay.Host.EnsureBehindCount}");
+        builder.AppendLine($"区域设置次数 : {overlay.Host.RegionApplyCount}");
+        builder.AppendLine($"收到左键     : {overlay.OverlayClickCount}    右键：{overlay.OverlayRightClickCount}");
+        builder.AppendLine($"命中区域     : {overlay.DescribeRegions()}");
         builder.AppendLine();
 
         if (MouseClicker.TryGetCursorPosition(out var x, out var y))
         {
-            var probe = DesktopProbe.WindowAt(x, y, hwnd);
+            var probe = DesktopProbe.WindowAt(x, y, 0);
+            var isOurs = _manager.IsOurOverlay(probe.Handle);
+
             builder.AppendLine($"光标位置     : ({x}, {y})");
-            builder.AppendLine($"光标命中窗口 : {(probe.IsOurs ? "★ 我们的浮层（该点点击会被拦截）" : "其他窗口（该点点击会放行）")}");
+            builder.AppendLine($"光标命中窗口 : {(isOurs ? "★ 我们的浮层（该点点击会被拦截）" : "其他窗口（该点点击会放行）")}");
             builder.AppendLine($"              class={probe.ClassName}  pid={probe.ProcessId}  title={probe.Title}");
-            builder.AppendLine($"              {(probe.IsDesktopLayer ? "这是桌面图层，说明点击落到了桌面本身 ✓" : string.Empty)}");
+            if (!isOurs && probe.IsDesktopLayer)
+            {
+                builder.AppendLine("              这是桌面图层，说明点击落到了桌面本身 ✓");
+            }
+
             builder.AppendLine();
         }
 
-        builder.AppendLine("Z 序最底部 5 个窗口（判断浮层有没有被压到 Progman 之下）：");
+        builder.AppendLine("== Z 序最底部 5 个窗口（判断浮层有没有被压到 Progman 之下）==");
         foreach (var window in snapshot.TakeLast(5))
         {
             builder.AppendLine($"  {window.Describe()}");
@@ -92,26 +110,49 @@ public partial class HudWindow : Window
     private void OnToggleMode(object sender, RoutedEventArgs e)
     {
         _mode = _mode == HitMode.PerPixelAlpha ? HitMode.WindowRegion : HitMode.PerPixelAlpha;
-        _overlay.ApplyMode(_mode);
+
+        foreach (var overlay in _manager.Windows)
+        {
+            overlay.ApplyMode(_mode);
+        }
+
         Refresh();
     }
 
     private void OnEnsureBehind(object sender, RoutedEventArgs e)
     {
-        _overlay.EnsureBehind();
+        foreach (var overlay in _manager.Windows)
+        {
+            overlay.EnsureBehind();
+        }
+
         Refresh();
+    }
+
+    private void OnRebuild(object sender, RoutedEventArgs e)
+    {
+        _manager.Rebuild("手动触发（界面按钮）");
+        Refresh();
+        StatusText.Text = $"已重建：{_manager.Windows.Count} 个浮层窗口，检测到 {_manager.Monitors.Count} 台显示器";
     }
 
     private async void OnRunSelfTest(object sender, RoutedEventArgs e)
     {
+        var overlay = _manager.PrimaryWindow;
+        if (overlay is null)
+        {
+            StatusText.Text = "没有可用的浮层窗口，自测无法进行。";
+            return;
+        }
+
         SelfTestButton.IsEnabled = false;
         StatusText.Text = "自测进行中：会短暂移动鼠标并在盒子内单击……";
 
         try
         {
-            var code = await SelfTestRunner.RunAsync(_overlay, new SpikeOptions(SelfTest: true, OutputDirectory: null));
+            var code = await SelfTestRunner.RunAsync(overlay, new SpikeOptions(true, null, false));
             StatusText.Text = code == 0
-                ? $"自测通过（exit 0），报告已写入 artifacts/"
+                ? "自测通过（exit 0），报告已写入 artifacts/"
                 : $"自测未通过（exit {code}），请看 artifacts/ 下的报告";
         }
         catch (Exception ex)

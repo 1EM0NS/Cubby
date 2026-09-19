@@ -10,17 +10,32 @@ using Cubby.Shell.Overlay;
 namespace Cubby.App;
 
 /// <summary>
-/// M0 spike 的浮层窗口。它同时是：
+/// 浮层窗口：一台显示器一个实例，覆盖该显示器的完整物理范围。
+/// 它同时是：
 /// 1. 被验证的对象——逐像素 alpha 与区域窗口两种命中机制；
 /// 2. 自动化的观测点——统计自己收到了多少次左键，用来证明「盒子内确实被拦截」或「确实没被拦截」。
+///
+/// 命名说明：类名沿用了 spike 阶段的叫法，真正的产品化改造（盒子交互、布局接线）在 issue #6 里做。
 /// </summary>
 public partial class SpikeWindow : Window
 {
     private const int WmLeftButtonDown = 0x0201;
+    private const int WmRightButtonDown = 0x0204;
+    private const int WmDisplayChange = 0x007E;
+    private const int WmDpiChanged = 0x02E0;
 
-    private readonly List<Box> _boxes = [];
+    private readonly List<Box> _boxes;
 
-    public SpikeWindow() => InitializeComponent();
+    public SpikeWindow(MonitorSurface surface, IReadOnlyList<Box> boxes)
+    {
+        InitializeComponent();
+
+        Surface = surface;
+        _boxes = [.. boxes];
+    }
+
+    /// <summary>显示状态发生变化（分辨率 / DPI / 显示器增减），由 OverlayManager 决定如何处理。</summary>
+    public event EventHandler<int>? DisplayChanged;
 
     public OverlayHost? Host { get; private set; }
 
@@ -44,18 +59,41 @@ public partial class SpikeWindow : Window
         source.AddHook(WndProc);
 
         var hwnd = source.Handle;
-        Surface = MonitorSurfaces.Primary(hwnd);
-
-        BuildBoxes(Surface);
-        Regions = HitRegion.ToPhysical(_boxes, Surface);
+        Regions = HitRegion.ToPhysical(_boxes, Surface!);
 
         Host = new OverlayHost(hwnd);
-        Host.Attach(Surface);
+        Host.Attach(Surface!);
         Host.SetMode(HitMode.PerPixelAlpha, Regions, rounded: false);
         Host.EnsureBehind();
         Host.StartAutoBehind();
 
         RenderBoxes();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        // 必须释放：否则每次重建都会残留一组 WinEvent 钩子
+        Host?.Dispose();
+        Host = null;
+
+        base.OnClosed(e);
+    }
+
+    /// <summary>换一组盒子（布局变化时调用），会同步重算命中区域。</summary>
+    public void UpdateBoxes(IReadOnlyList<Box> boxes)
+    {
+        _boxes.Clear();
+        _boxes.AddRange(boxes);
+        RefreshRegions();
+    }
+
+    /// <summary>换到另一台显示器上（分辨率或 DPI 变化时调用）。</summary>
+    public void PlaceOn(MonitorSurface surface)
+    {
+        Surface = surface;
+        Host?.Attach(surface);
+        RefreshRegions();
+        Host?.EnsureBehind();
     }
 
     /// <summary>切换命中机制并重绘。</summary>
@@ -119,29 +157,16 @@ public partial class SpikeWindow : Window
     public string DescribeRegions() =>
         Regions.Count == 0 ? "（无）" : string.Join("、", Regions.Select(r => r.ToString()));
 
-    private void BuildBoxes(MonitorSurface surface)
+    private void RefreshRegions()
     {
-        // DIP 坐标来自统一布局层；这里放到显示器左上区域，右侧留出透明区用于采样
-        _boxes.Add(new Box("A", "盒子 A", new DipRect(60, 80, 420, 300)));
-        _boxes.Add(new Box("B", "盒子 B", new DipRect(60, 420, 420, 260)));
-
-        var dipWidth = surface.Bounds.Width / surface.DpiScale;
-        var dipHeight = surface.Bounds.Height / surface.DpiScale;
-
-        // 分辨率过小时收缩盒子，避免铺满整屏导致没有透明区可采样
-        if (dipHeight < 900)
+        if (Surface is null)
         {
-            _boxes.Clear();
-            _boxes.Add(new Box("A", "盒子 A", new DipRect(40, 60, 360, (dipHeight - 200) / 2)));
-            _boxes.Add(new Box("B", "盒子 B", new DipRect(40, 120 + (dipHeight - 200) / 2, 360, (dipHeight - 200) / 2)));
+            return;
         }
 
-        if (dipWidth < 800)
-        {
-            _boxes.Clear();
-            _boxes.Add(new Box("A", "盒子 A", new DipRect(20, 60, dipWidth * 0.45, 260)));
-            _boxes.Add(new Box("B", "盒子 B", new DipRect(20, 360, dipWidth * 0.45, 220)));
-        }
+        Regions = HitRegion.ToPhysical(_boxes, Surface);
+        Host?.SetMode(Host.Mode, Regions, rounded: false);
+        RenderBoxes();
     }
 
     private void RenderBoxes()
@@ -168,10 +193,11 @@ public partial class SpikeWindow : Window
                 Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xE5, 0xE5, 0xE5)),
                 FontSize = 16,
                 FontWeight = FontWeights.Medium,
+                TextWrapping = TextWrapping.Wrap,
             });
             stack.Children.Add(new TextBlock
             {
-                Text = $"DIP 位置 ({box.Bounds.X:0},{box.Bounds.Y:0})  尺寸 {box.Bounds.Width:0}×{box.Bounds.Height:0}",
+                Text = $"DIP ({box.Bounds.X:0},{box.Bounds.Y:0})  {box.Bounds.Width:0}×{box.Bounds.Height:0}",
                 Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xA1, 0xA1, 0xAA)),
                 FontSize = 12,
                 Margin = new Thickness(0, 6, 0, 0),
@@ -199,8 +225,14 @@ public partial class SpikeWindow : Window
             case WmLeftButtonDown:
                 OverlayClickCount++;
                 break;
-            case 0x0204:
+
+            case WmRightButtonDown:
                 OverlayRightClickCount++;
+                break;
+
+            case WmDisplayChange:
+            case WmDpiChanged:
+                DisplayChanged?.Invoke(this, msg);
                 break;
         }
 

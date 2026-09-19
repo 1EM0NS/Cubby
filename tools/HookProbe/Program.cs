@@ -46,7 +46,7 @@ internal static class Program
         var outFile = ValueOf(args, "--out");
         var baselineFile = ValueOf(args, "--baseline");
 
-        var surface = MonitorSurfaces.Primary(0);
+        var surface = MonitorSurfaces.Primary();
         var target = PointOf(args, "--at") ?? FindDesktopPoint(surface);
 
         if (target is null)
