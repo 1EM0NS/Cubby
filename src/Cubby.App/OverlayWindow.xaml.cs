@@ -199,6 +199,28 @@ public partial class OverlayWindow : Window
     /// <summary>按盒子 Id 取视图。供自动化验收直接驱动某个盒子的交互（如拖入）。</summary>
     internal BoxView? ViewOf(string boxId) => _views.TryGetValue(boxId, out var view) ? view : null;
 
+    /// <summary>
+    /// 外部改了这个盒子的模型（例如映射的目录变了），把视图同步过去。
+    /// 与 <see cref="OnBoxViewChanged"/> 方向相反：那条是"视图 → 模型"，这条是"模型 → 视图"。
+    /// </summary>
+    public void ApplyBoxUpdate(Box box)
+    {
+        var index = _boxes.FindIndex(b => b.Id == box.Id);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _boxes[index] = box;
+
+        if (_views.TryGetValue(box.Id, out var view))
+        {
+            view.Update(box);
+        }
+
+        RefreshRegions();
+    }
+
     public string DescribeRegions() =>
         Regions.Count == 0 ? "（无）" : string.Join("、", Regions.Select(r => r.ToString()));
 

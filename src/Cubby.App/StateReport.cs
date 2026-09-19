@@ -31,6 +31,11 @@ internal static class StateReport
             builder.AppendLine($"吸附结果 : {adopt}");
         }
 
+        if (manager.MappingWatcherCount > 0)
+        {
+            builder.AppendLine($"映射监听 : {manager.MappingWatcherCount} 个；累计重扫 {manager.MappingRescanCount} 次（溢出重建 {manager.MappingOverflowCount} 次）");
+        }
+
         builder.AppendLine();
         builder.AppendLine("== 显示器 ==");
         builder.AppendLine(manager.DescribeMonitors());

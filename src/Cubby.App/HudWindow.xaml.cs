@@ -72,6 +72,15 @@ public partial class HudWindow : Window
             builder.AppendLine($"吸附结果   : {adopt}");
         }
 
+        if (_manager.MappingWatcherCount > 0)
+        {
+            builder.AppendLine($"映射监听   : {_manager.MappingWatcherCount} 个；累计重扫 {_manager.MappingRescanCount} 次（溢出重建 {_manager.MappingOverflowCount} 次）");
+            foreach (var line in _manager.MappingDiagnostics)
+            {
+                builder.AppendLine(line);
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("== 盒子 ==");
         foreach (var box in _layout.Boxes)

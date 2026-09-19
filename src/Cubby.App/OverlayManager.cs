@@ -25,7 +25,24 @@ internal sealed class OverlayManager : IBoxChangeSink
     /// <summary>盒子是否可见。重建浮层后要按这个状态恢复，否则显示器一变盒子就自己冒出来。</summary>
     private bool _boxesVisible = true;
 
-    public OverlayManager(LayoutService layout) => _layout = layout;
+    /// <summary>映射文件夹的同步器：目录一变就把新内容推给盒子。</summary>
+    private readonly MappedFolderService _mapping;
+
+    public OverlayManager(LayoutService layout)
+    {
+        _layout = layout;
+        _mapping = new MappedFolderService(layout, ApplyBoxUpdate);
+    }
+
+    /// <summary>映射同步的诊断（供诊断面板与状态报告）。</summary>
+    public IReadOnlyList<string> MappingDiagnostics => _mapping.Diagnostics;
+
+    public int MappingWatcherCount => _mapping.WatcherCount;
+
+    /// <summary>映射同步累计重扫次数与溢出重建次数（诊断/验收）。</summary>
+    public int MappingRescanCount => _mapping.TotalRescanCount;
+
+    public int MappingOverflowCount => _mapping.TotalOverflowCount;
 
     public IReadOnlyList<OverlayWindow> Windows => _windows;
 
@@ -84,13 +101,26 @@ internal sealed class OverlayManager : IBoxChangeSink
         LastRebuildReason = reason;
         LastRebuildAt = DateTime.Now.ToString("HH:mm:ss.fff");
 
+        // 重建后按新布局重挂映射监视器（盒子可能被挪到别的显示器，但映射关系不变）
+        _mapping.Sync(_layout.Boxes);
+
         AppendRebuildLog(reason);
     }
 
     public void Stop()
     {
+        _mapping.Dispose();
         CloseAll();
         _layout.SaveNow();
+    }
+
+    /// <summary>把某个盒子的最新模型推给它所在的浮层（映射同步、外部修改都走这里）。</summary>
+    public void ApplyBoxUpdate(Box box)
+    {
+        foreach (var window in _windows)
+        {
+            window.ApplyBoxUpdate(box);
+        }
     }
 
     /// <summary>盒子当前是否显示。</summary>
@@ -124,7 +154,13 @@ internal sealed class OverlayManager : IBoxChangeSink
 
     // ---- IBoxChangeSink ----
 
-    public void OnBoxChanged(Box box) => _layout.UpdateBox(box);
+    public void OnBoxChanged(Box box)
+    {
+        _layout.UpdateBox(box);
+
+        // 映射关系可能刚被建立或解除，让同步器跟上
+        _mapping.Sync(_layout.Boxes);
+    }
 
     public void OnItemOpen(BoxItem item)
     {

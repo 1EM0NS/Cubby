@@ -69,7 +69,7 @@ public partial class App : Application
         _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell || options.Adopt || options.Snapshot || options.Map)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -100,7 +100,9 @@ public partial class App : Application
                                     ? await ShellTestRunner.RunAsync(manager, layout, options)
                                     : options.Adopt
                                         ? await AdoptTestRunner.RunAsync(overlay, layout, options)
-                                        : await SnapshotTestRunner.RunAsync(manager, layout, options);
+                                        : options.Snapshot
+                                            ? await SnapshotTestRunner.RunAsync(manager, layout, options)
+                                            : await MapTestRunner.RunAsync(overlay, layout, manager, options);
 
                 Shutdown(exitCode);
             };
@@ -242,7 +244,8 @@ internal sealed record SpikeOptions(
     bool UninstallAutoStart = false,
     bool DumpDesktopIcons = false,
     bool Adopt = false,
-    bool Snapshot = false)
+    bool Snapshot = false,
+    bool Map = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -257,7 +260,8 @@ internal sealed record SpikeOptions(
         UninstallAutoStart: Has(args, "--uninstall-autostart"),
         DumpDesktopIcons: Has(args, "--dump-desktop-icons"),
         Adopt: Has(args, "--selftest-adopt"),
-        Snapshot: Has(args, "--selftest-snapshot"));
+        Snapshot: Has(args, "--selftest-snapshot"),
+        Map: Has(args, "--selftest-map"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
