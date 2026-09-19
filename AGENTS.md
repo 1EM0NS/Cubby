@@ -85,6 +85,18 @@ gh issue list --repo 1EM0NS/Cubby --limit 30
 
 `--selftest` 不受影响：它自造一个受控背景层并置顶，刻意绕开用户桌面状态。
 
+### 出问题了先看日志
+
+- 崩溃与未处理异常写在 `%AppData%\Cubby\logs\cubby-yyyyMMdd.log`：按天分文件，
+  保留最近 **14 天**、总量上限 **8MB**，超额从最老的开始删。文件头记录**版本 / OS / 运行时**三要素。
+- 三处入口的处理策略**刻意不同**，别当成不一致去"统一"：
+  `DispatcherUnhandledException` 落盘 + 非模态提示后 `Handled=true`（常驻程序不该因为一次 UI 异常整体退出）；
+  `AppDomain.UnhandledException` 落盘 + **模态**提示（进程随后就没了，值得拦住）；
+  `TaskScheduler.UnobservedTaskException` **只落盘不弹窗**（它不是一个崩溃，每次弹窗就是骚扰）。
+- **顺序是需求的一部分**：先还原桌面图标标记 → 再写日志 → 最后提示用户。
+  图标是我们留在用户机器上的副作用，优先级高于"留证据"；改 `CrashReporter.Handle` 时不要调换。
+- `CrashLog` 的所有公开方法**都不抛异常**，写不进去就返回 `null`——日志问题绝不升级成崩溃问题。
+
 ### Cubby 自带的自动化验收（报告都写到 `artifacts/`）
 
 ```powershell
@@ -104,6 +116,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-appearance   # 视觉打磨：像素级 P2 断言（盒子外 alpha=0）+ 预览图（写 appearance-report.md / appearance-preview.png）
 & $app --selftest-coexist      # 同类软件共存（A8）：造真实同名进程，证明只提示不抢占（写 coexist-report.md）
 & $app --selftest-onboard      # 首次运行引导：出现 / 跳过 / 重置三条路径 + 托盘「使用指引」（写 onboard-report.md）
+& $app --selftest-crashlog     # 崩溃日志：注入假异常落盘 + 文件头 + 轮转/保留 + 提示窗可操作（写 crashlog-report.md）
 & $app --reset-onboarding      # 重置引导标记，下次启动重新出现欢迎窗（换机、演示前重放用）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
