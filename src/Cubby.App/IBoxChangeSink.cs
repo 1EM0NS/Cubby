@@ -22,4 +22,7 @@ internal interface IBoxChangeSink
 
     /// <summary>请求打开某个盒子的搜索窗口。</summary>
     void OnSearchRequested(Box box);
+
+    /// <summary>请求切换桌面图标的显隐（盒子标题栏按钮 / 全局热键）。</summary>
+    void OnDesktopIconToggleRequested();
 }

@@ -38,6 +38,9 @@ internal static class StateReport
 
         builder.AppendLine($"搜索索引 : {manager.SearchDescription}");
         builder.AppendLine($"归类规则 : {manager.Rules.Describe()}");
+        builder.AppendLine(
+            $"桌面图标 : {(manager.DesktopIconToggle.IsVisible ? "显示中" : "已隐藏")}；" +
+            $"开关={manager.DesktopIconToggle.IsEnabled}；最近操作 {manager.DesktopIconToggle.LastAction}");
 
         builder.AppendLine();
         builder.AppendLine("== 显示器 ==");
