@@ -1,17 +1,27 @@
 using System.IO;
 using System.Text;
 using System.Windows;
+using Cubby.Shell.Desktop;
 
 namespace Cubby.App;
 
 /// <summary>
-/// 入口。无参启动进入交互式诊断面板；带参数走自动化路径：
-/// <c>--selftest</c> 跑命中测试、<c>--dump-monitors</c> 输出显示器与分配计划。
+/// 入口。**无参启动 = 常驻形态**：只有托盘图标，不占任务栏，盒子浮层照常工作。
+/// 带参数走诊断与自动化路径：<c>--diagnostics</c> 打开诊断面板、<c>--selftest*</c> 跑各类验收、
+/// <c>--dump-*</c> 产出报告后退出。
 /// </summary>
 public partial class App : Application
 {
+    private OverlayManager? _manager;
+    private TrayIcon? _tray;
+    private SettingsWindow? _settings;
+
     public App()
     {
+        // 常驻形态下浮层窗口会被反复重建（显示器变化），默认的 OnLastWindowClose 会在
+        // 重建的空档里把整个程序关掉。退出只由托盘菜单或自动化流程显式触发。
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
         // 崩溃必须留痕：否则自动化运行时只能看到一个退出码，无从排查
         DispatcherUnhandledException += (_, args) => LogCrash("DispatcherUnhandledException", args.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -23,6 +33,14 @@ public partial class App : Application
         base.OnStartup(e);
 
         var options = SpikeOptions.Parse(e.Args);
+
+        if (options.UninstallAutoStart)
+        {
+            // 给未来的安装包留的卸载钩子（M3）：把自启项摘干净
+            StartupRegistration.Disable();
+            Shutdown(0);
+            return;
+        }
 
         if (options.DumpMonitors)
         {
@@ -40,9 +58,10 @@ public partial class App : Application
 
         var layout = new LayoutService(layoutPath);
         var manager = new OverlayManager(layout);
+        _manager = manager;
         manager.Start();
 
-        if (options.SelfTest || options.Interact || options.Drop || options.Menu)
+        if (options.SelfTest || options.Interact || options.Drop || options.Menu || options.Shell)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -67,7 +86,9 @@ public partial class App : Application
                         ? await InteractionTestRunner.RunAsync(overlay, layout, options)
                         : options.Drop
                             ? await DropTestRunner.RunAsync(overlay, layout, options)
-                            : await ItemMenuTestRunner.RunAsync(overlay, layout, options);
+                            : options.Menu
+                                ? await ItemMenuTestRunner.RunAsync(overlay, layout, options)
+                                : await ShellTestRunner.RunAsync(manager, layout, options);
 
                 Shutdown(exitCode);
             };
@@ -93,7 +114,72 @@ public partial class App : Application
             return;
         }
 
-        new HudWindow(manager, layout).Show();
+        StartTray(manager, layout);
+
+        if (options.Diagnostics)
+        {
+            new HudWindow(manager, layout).Show();
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // 隐藏桌面图标是系统级副作用：退出时无条件还原，否则用户会面对一个空荡荡的桌面
+        DesktopIcons.SetVisible(true);
+
+        _tray?.Dispose();
+        _tray = null;
+
+        _manager?.Stop();
+        _manager = null;
+
+        base.OnExit(e);
+    }
+
+    /// <summary>常驻托盘：显示 / 隐藏盒子、显示 / 隐藏桌面图标、开机自启、设置、退出。</summary>
+    private void StartTray(OverlayManager manager, LayoutService layout)
+    {
+        var tray = new TrayIcon();
+        _tray = tray;
+
+        tray.SetBoxesChecked(manager.BoxesVisible);
+        tray.SetDesktopIconsChecked(DesktopIcons.IsVisible());
+        tray.SetAutoStartChecked(StartupRegistration.IsEnabled());
+
+        tray.BoxesVisibilityRequested += (_, visible) => manager.SetBoxesVisible(visible);
+
+        tray.DesktopIconsVisibilityRequested += (_, visible) =>
+        {
+            // 找不到图标层（Explorer 正在重启）时把勾选状态改回真实状态，不让界面说谎
+            if (!DesktopIcons.SetVisible(visible))
+            {
+                tray.SetDesktopIconsChecked(DesktopIcons.IsVisible());
+            }
+        };
+
+        tray.AutoStartRequested += (_, enabled) =>
+        {
+            StartupRegistration.SetEnabled(enabled);
+            tray.SetAutoStartChecked(StartupRegistration.IsEnabled());
+        };
+
+        tray.SettingsRequested += (_, _) => ShowSettings(manager, layout);
+        tray.ExitRequested += (_, _) => Shutdown();
+    }
+
+    private void ShowSettings(OverlayManager manager, LayoutService layout)
+    {
+        if (_settings is { IsLoaded: true })
+        {
+            _settings.Activate();
+            return;
+        }
+
+        var current = manager.Windows.FirstOrDefault()?.CurrentStyle ?? layout.Style;
+
+        _settings = new SettingsWindow(current, manager.ApplyStyle);
+        _settings.Closed += (_, _) => _settings = null;
+        _settings.Show();
     }
 
     /// <summary>把未处理异常写到 artifacts/crash.log（M3 做正式崩溃日志时会统一搬到 %AppData%）。</summary>
@@ -117,7 +203,17 @@ public partial class App : Application
 }
 
 /// <summary>命令行参数。</summary>
-internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact, bool Drop = false, bool Menu = false)
+internal sealed record SpikeOptions(
+    bool SelfTest,
+    string? OutputDirectory,
+    bool DumpMonitors,
+    bool DumpState,
+    bool Interact,
+    bool Drop = false,
+    bool Menu = false,
+    bool Shell = false,
+    bool Diagnostics = false,
+    bool UninstallAutoStart = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -126,7 +222,10 @@ internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool
         DumpState: Has(args, "--dump-state"),
         Interact: Has(args, "--selftest-interact"),
         Drop: Has(args, "--selftest-drop"),
-        Menu: Has(args, "--selftest-menu"));
+        Menu: Has(args, "--selftest-menu"),
+        Shell: Has(args, "--selftest-shell"),
+        Diagnostics: Has(args, "--diagnostics"),
+        UninstallAutoStart: Has(args, "--uninstall-autostart"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

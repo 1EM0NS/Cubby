@@ -27,8 +27,10 @@ public partial class OverlayWindow : Window
 
     private readonly List<Box> _boxes;
     private readonly Dictionary<string, BoxView> _views = new();
-    private readonly StyleSettings _style;
     private readonly IBoxChangeSink _sink;
+
+    /// <summary>全局样式。设置窗口改样式时会替换它并重绘（因此不是 readonly）。</summary>
+    private StyleSettings _style;
 
     internal OverlayWindow(
         MonitorSurface surface,
@@ -118,10 +120,17 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>全局样式变化后重新渲染所有盒子。</summary>
-    public void ApplyStyle()
+    public void ApplyStyle() => RenderBoxes();
+
+    /// <summary>换成新的全局样式并立即重绘（设置窗口拖动滑块时走这里）。</summary>
+    public void ChangeStyle(StyleSettings style)
     {
+        _style = style.Normalized();
         RenderBoxes();
     }
+
+    /// <summary>当前生效的样式。</summary>
+    public StyleSettings CurrentStyle => _style;
 
     /// <summary>切换命中机制并重绘。</summary>
     public void ApplyMode(HitMode mode)

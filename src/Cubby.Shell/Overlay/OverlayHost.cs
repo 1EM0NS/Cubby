@@ -92,10 +92,7 @@ public sealed class OverlayHost : IDisposable
         }
 
         var flags = NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpNoActivate;
-        if (_wantsVisible)
-        {
-            flags |= NativeMethods.SwpShowWindow;
-        }
+        flags |= _wantsVisible ? NativeMethods.SwpShowWindow : NativeMethods.SwpHideWindow;
 
         NativeMethods.SetWindowPos(_hwnd, NativeMethods.HwndBottom, 0, 0, 0, 0, flags);
         EnsureBehindCount++;
@@ -132,12 +129,15 @@ public sealed class OverlayHost : IDisposable
             0, _eventCallback, 0, 0, flags));
     }
 
-    /// <summary>显示/隐藏浮层（后续做「隐藏盒子」功能时用）。</summary>
+    /// <summary>显示/隐藏浮层（托盘菜单「隐藏盒子」用）。隐藏期间窗口不参与命中测试。</summary>
     public void SetVisible(bool visible)
     {
         _wantsVisible = visible;
         EnsureBehind();
     }
+
+    /// <summary>当前期望的可见状态。自动置底不会改变它。</summary>
+    public bool WantsVisible => _wantsVisible;
 
     public void Dispose()
     {

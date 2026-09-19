@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using Cubby.Core.Model;
+using Cubby.Shell.Diagnostics;
 
 namespace Cubby.App;
 
@@ -59,10 +60,38 @@ internal static class StateReport
         }
 
         builder.AppendLine();
+        builder.AppendLine("== 常驻资源（A7：挂机后应无增长）==");
+        builder.AppendLine(DescribeResources());
+
+        builder.AppendLine();
         builder.AppendLine("判读提示：若「实际视图数」为 0 而「模型盒子数」大于 0，说明盒子没有渲染出来；");
-        builder.AppendLine("         若「Win32 收到左键」大于 0 而「WPF 收到左键」等于 0，说明 WPF 层没有路由到元素。");
+        builder.AppendLine("         若「Win32 收到左键」大于 0 而「WPF 收到左键」等于 0，说明 WPF 层没有路由到元素；");
+        builder.AppendLine("         间隔数小时各跑一次 --dump-state，比对上面这五个数字即可判断有没有泄漏。");
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// 常驻稳定性（A7）需要看的就是这四个数：工作集、私有内存、句柄数、GDI / USER 对象数。
+    /// 后两者最容易泄漏，且任务管理器默认看不到，所以单独列出来。
+    /// </summary>
+    private static string DescribeResources()
+    {
+        try
+        {
+            var sample = ResourceProbe.Sample();
+
+            return $"  工作集       : {sample.WorkingSetMb:0.0} MB{Environment.NewLine}" +
+                   $"  私有内存     : {sample.PrivateMb:0.0} MB{Environment.NewLine}" +
+                   $"  句柄数       : {sample.Handles}{Environment.NewLine}" +
+                   $"  GDI 对象     : {sample.GdiObjects}{Environment.NewLine}" +
+                   $"  USER 对象    : {sample.UserObjects}{Environment.NewLine}" +
+                   $"  运行时长     : {sample.UptimeMinutes:0.0} 分钟";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return $"  （读取失败：{ex.Message}）";
+        }
     }
 
     public static string Write(OverlayManager manager, LayoutService layout, string path)

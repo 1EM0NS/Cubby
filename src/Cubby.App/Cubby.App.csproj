@@ -4,11 +4,25 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- 托盘用 WinForms 的 NotifyIcon：比手写 Shell_NotifyIcon + 消息窗口少一大截互操作代码 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Cubby.App</RootNamespace>
     <AssemblyName>Cubby.App</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFAC010 是 WinForms SDK 的提醒：建议改用它自己的 HighDpiMode。
+         本项目的每显示器 DPI 感知是 M0 就在 manifest 里定好的（浮层要按物理像素铺满显示器），
+         不启用 WinForms 的 DPI 引导，因此这里显式压掉这条提醒。 -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <!-- 无参启动 = 交互式 spike；带 selftest 参数 = 自动化命中测试后退出 -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms 会把 System.Windows.Forms / System.Drawing 塞进隐式 using，
+         那会与 WPF 的 Application / MouseEventArgs / DataObject / Point / Color 大面积撞名。
+         托盘只在一个文件里用得到，所以把隐式引入摘掉，需要的地方显式 using。 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Cubby.Core\Cubby.Core.csproj" />

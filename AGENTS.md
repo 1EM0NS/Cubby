@@ -77,9 +77,11 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-interact     # 盒子交互：拖动 / 缩放 / 折叠 / 锁定（写 interaction-report.md）
 & $app --selftest-drop         # 拖入：生成引用 + 原文件指纹不变（写 drop-report.md）
 & $app --selftest-menu         # 条目菜单 / 拖出：命令效果 + 原文件指纹不变（写 menu-report.md）
+& $app --selftest-shell        # 托盘 / 自启 / 样式 / 显隐 / 资源基线（写 shell-report.md）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
-& $app --dump-state            # 运行状态：盒子渲染数量、命中区域、Win32/WPF 鼠标计数（写 state.txt）
-& $app                         # 无参 = 交互式诊断面板
+& $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）
+& $app --diagnostics           # 常驻托盘 + 打开诊断面板
+& $app                         # 无参 = 常驻形态（只有托盘图标，不占任务栏）
 
 # 窗口链置底断言（A4）
 .\tools\ZOrderProbe\bin\Release\net8.0-windows\ZOrderProbe.exe --assert-behind --exe Cubby.App --title "Cubby 浮层"
