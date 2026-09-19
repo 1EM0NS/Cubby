@@ -13,4 +13,7 @@ internal interface IBoxChangeSink
 
     /// <summary>条目被双击（或从菜单选择打开）。</summary>
     void OnItemOpen(BoxItem item);
+
+    /// <summary>要求在资源管理器里定位该条目（右键菜单「打开位置」）。</summary>
+    void OnItemReveal(BoxItem item);
 }

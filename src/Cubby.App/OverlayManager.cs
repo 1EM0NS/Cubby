@@ -112,6 +112,30 @@ internal sealed class OverlayManager : IBoxChangeSink
         }
     }
 
+    /// <summary>在资源管理器中定位条目。只读操作，不改变磁盘上的任何东西。</summary>
+    public void OnItemReveal(BoxItem item)
+    {
+        try
+        {
+            // /select 需要目标已存在；不存在时退回打开其所在目录
+            var target = File.Exists(item.TargetPath) || Directory.Exists(item.TargetPath)
+                ? item.TargetPath
+                : Path.GetDirectoryName(item.TargetPath);
+
+            if (string.IsNullOrEmpty(target))
+            {
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{target}\"") { UseShellExecute = true });
+            LastOpenError = null;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+        {
+            LastOpenError = $"{item.DisplayName}: {ex.Message}";
+        }
+    }
+
     /// <summary>诊断用的显示器摘要。</summary>
     public string DescribeMonitors()
     {

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,6 +7,22 @@ using Cubby.Core.Layout;
 using Cubby.Core.Model;
 
 namespace Cubby.App.Views;
+
+/// <summary>条目上的用户动作，右键菜单与自动化验收走同一套入口。</summary>
+internal enum ItemAction
+{
+    /// <summary>按系统关联打开。</summary>
+    Open,
+
+    /// <summary>在资源管理器中定位。</summary>
+    Reveal,
+
+    /// <summary>改展示名（**不重命名磁盘文件**）。</summary>
+    Rename,
+
+    /// <summary>把条目移出盒子（**不删除磁盘文件**）。</summary>
+    Remove,
+}
 
 /// <summary>
 /// 单个盒子的视图：标题栏（拖动 / 锁定 / 折叠）、条目网格、右下角缩放手柄。
@@ -20,6 +37,11 @@ public partial class BoxView : UserControl
     private Point _lastPoint;
     private bool _moving;
     private bool _resizing;
+
+    // 条目拖出的待定状态：按下后超过系统拖动阈值才算拖拽，否则算单击
+    private BoxItem? _pendingDragItem;
+    private Point _pendingDragOrigin;
+    private FrameworkElement? _pendingDragSource;
 
     public BoxView(Box box, StyleSettings style, MonitorSurface surface)
     {
@@ -38,9 +60,15 @@ public partial class BoxView : UserControl
     /// <summary>双击条目，或通过右键菜单请求打开。</summary>
     public event EventHandler<BoxItem>? ItemOpenRequested;
 
+    /// <summary>右键菜单「打开位置」。</summary>
+    public event EventHandler<BoxItem>? ItemRevealRequested;
+
     public Box Current { get; private set; }
 
     public StyleSettings BoxStyle { get; }
+
+    /// <summary>最近一次拖出被目标接受的效果（诊断用）。</summary>
+    public string? LastDragOutEffect { get; private set; }
 
     /// <summary>用新的模型刷新视图（例如宿主从磁盘重载了布局）。</summary>
     public void Update(Box box)
@@ -157,17 +185,163 @@ public partial class BoxView : UserControl
         stack.Children.Add(badge);
         stack.Children.Add(name);
 
-        stack.MouseLeftButtonDown += (_, e) =>
-        {
-            if (e.ClickCount >= 2)
-            {
-                ItemOpenRequested?.Invoke(this, item);
-                e.Handled = true;
-            }
-        };
+        stack.ContextMenu = BuildItemMenu(item);
+
+        stack.MouseLeftButtonDown += (_, e) => OnItemMouseDown(stack, item, e);
+        stack.MouseMove += OnItemMouseMove;
+        stack.MouseLeftButtonUp += (_, _) => ResetPendingDrag();
 
         return stack;
     }
+
+    // ---- 右键菜单 ----
+
+    /// <summary>条目右键菜单。菜单项本身不做磁盘操作，只把动作转给 <see cref="InvokeItemAction"/>。</summary>
+    internal ContextMenu BuildItemMenu(BoxItem item)
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(MenuEntry("打开", () => InvokeItemAction(ItemAction.Open, item)));
+        menu.Items.Add(MenuEntry("打开位置", () => InvokeItemAction(ItemAction.Reveal, item)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("重命名", () => RenameInteractive(item)));
+        menu.Items.Add(MenuEntry("移出盒子", () => InvokeItemAction(ItemAction.Remove, item)));
+
+        return menu;
+    }
+
+    private static MenuItem MenuEntry(string header, Action action)
+    {
+        var entry = new MenuItem { Header = header };
+        entry.Click += (_, _) => action();
+        return entry;
+    }
+
+    /// <summary>
+    /// 条目动作的统一入口。右键菜单与自动化验收都从这里走，
+    /// 因此验收覆盖到的就是用户点击时真正执行的那段代码。
+    /// </summary>
+    internal void InvokeItemAction(ItemAction action, BoxItem item, string? newName = null)
+    {
+        switch (action)
+        {
+            case ItemAction.Open:
+                ItemOpenRequested?.Invoke(this, item);
+                break;
+
+            case ItemAction.Reveal:
+                ItemRevealRequested?.Invoke(this, item);
+                break;
+
+            case ItemAction.Rename when !string.IsNullOrWhiteSpace(newName):
+                // 只改展示名，不碰磁盘上的文件名（P4）
+                Apply(Current with
+                {
+                    Items = Current.Items
+                        .Select(i => i.Id == item.Id ? i with { DisplayName = newName.Trim() } : i)
+                        .ToList(),
+                });
+                break;
+
+            case ItemAction.Remove:
+                var remaining = Current.Items.Where(i => i.Id != item.Id).ToList();
+                if (remaining.Count != Current.Items.Count)
+                {
+                    // 只摘下引用，磁盘上的文件原样留在原处（P4）
+                    Apply(Current with { Items = remaining });
+                }
+
+                break;
+        }
+    }
+
+    private void RenameInteractive(BoxItem item)
+    {
+        var prompt = new TextPromptWindow("重命名条目", item.DisplayName)
+        {
+            Owner = Window.GetWindow(this),
+        };
+
+        if (prompt.ShowDialog() == true)
+        {
+            InvokeItemAction(ItemAction.Rename, item, prompt.Value);
+        }
+    }
+
+    // ---- 拖出到资源管理器 ----
+
+    private void OnItemMouseDown(FrameworkElement source, BoxItem item, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount >= 2)
+        {
+            ItemOpenRequested?.Invoke(this, item);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.ClickCount == 1)
+        {
+            _pendingDragItem = item;
+            _pendingDragOrigin = e.GetPosition(this);
+            _pendingDragSource = source;
+        }
+    }
+
+    private void OnItemMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_pendingDragItem is null || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        if (Math.Abs(point.X - _pendingDragOrigin.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(point.Y - _pendingDragOrigin.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var item = _pendingDragItem;
+        var source = _pendingDragSource ?? (DependencyObject)this;
+        ResetPendingDrag();
+        StartDragOut(item, source);
+    }
+
+    private void ResetPendingDrag()
+    {
+        _pendingDragItem = null;
+        _pendingDragSource = null;
+    }
+
+    /// <summary>
+    /// 拖出：只提供 <c>CF_HDROP</c>（FileDrop），由目标窗口决定复制还是移动。
+    /// **Cubby 自己不执行任何文件操作**；若目标把文件移走了，条目引用随之失效，于是移出盒子。
+    /// 详见 docs/adr/0004-drag-out-allows-target-to-move.md。
+    /// </summary>
+    private void StartDragOut(BoxItem item, DependencyObject source)
+    {
+        try
+        {
+            var effect = DragDrop.DoDragDrop(
+                source,
+                BuildDragOutData(item),
+                DragDropEffects.Copy | DragDropEffects.Move);
+
+            LastDragOutEffect = effect.ToString();
+
+            if (effect.HasFlag(DragDropEffects.Move))
+            {
+                InvokeItemAction(ItemAction.Remove, item);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or COMException)
+        {
+            LastDragOutEffect = ex.Message;
+        }
+    }
+
+    /// <summary>拖出时给目标窗口的数据：只有一条 <c>CF_HDROP</c>（FileDrop）路径，不含任何"删除/移动"指令。</summary>
+    internal static DataObject BuildDragOutData(BoxItem item) =>
+        new(DataFormats.FileDrop, new[] { item.TargetPath });
 
     private static string BadgeText(BoxItem item) => item.Kind switch
     {

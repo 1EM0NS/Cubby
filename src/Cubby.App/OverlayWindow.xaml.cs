@@ -203,6 +203,7 @@ public partial class OverlayWindow : Window
             var view = new BoxView(box, _style, Surface!);
             view.BoxChanged += OnBoxViewChanged;
             view.ItemOpenRequested += (_, item) => _sink.OnItemOpen(item);
+            view.ItemRevealRequested += (_, item) => _sink.OnItemReveal(item);
 
             Canvas.SetLeft(view, box.Bounds.X);
             Canvas.SetTop(view, box.Bounds.Y);
