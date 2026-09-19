@@ -279,6 +279,48 @@ public partial class BoxView : UserControl
         Mouse.Capture(null);
     }
 
+    // ---- 拖入：生成引用 ----
+
+    private void OnDragOver(object sender, DragEventArgs e) =>
+        e.Effects = CanImport(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        var added = ImportDrop(e.Data);
+        e.Handled = added.Count > 0;
+    }
+
+    /// <summary>
+    /// 把一次拖放的数据转成盒子条目。
+    /// 抽成方法是为了让自动化验收能直接喂一个 <see cref="DataObject"/> 进来，
+    /// 而不必真的去驱动一次系统级拖放（那没法用 SendInput 复现）。
+    /// </summary>
+    internal IReadOnlyList<BoxItem> ImportDrop(IDataObject? data)
+    {
+        var paths = PathsOf(data);
+        if (paths.Count == 0)
+        {
+            return [];
+        }
+
+        // P4：这里只登记引用，绝不触碰磁盘上的实体
+        var added = DropImport.Create(paths, Current.Items);
+        if (added.Count == 0)
+        {
+            return [];
+        }
+
+        Apply(Current with { Items = [.. Current.Items, .. added] });
+        return added;
+    }
+
+    private static bool CanImport(IDataObject? data) => PathsOf(data).Count > 0;
+
+    private static IReadOnlyList<string> PathsOf(IDataObject? data) =>
+        data?.GetDataPresent(DataFormats.FileDrop) == true && data.GetData(DataFormats.FileDrop) is string[] paths
+            ? paths
+            : [];
+
     // ---- 按钮 ----
 
     private void OnToggleLock(object sender, RoutedEventArgs e) =>
