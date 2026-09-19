@@ -49,6 +49,22 @@ public partial class App : Application
             return;
         }
 
+        if (options.RestoreOnExit)
+        {
+            // 卸载前的收尾（issue #40）：先把「我们留在用户机器上的副作用」清干净，再让脚本删文件。
+            // 两件事都幂等，重复跑无害：
+            //   ① 桌面图标——万一上次是崩溃 / 强杀，标记还在，这里把它放出来并清标记；
+            //   ② 开机自启——注册表 Run 项。
+            // 刻意放在创建浮层之前：卸载路径不该把盒子再拉起来闪一下。
+            var recovery = DesktopIconController.RecoverIfLeftHidden();
+            StartupRegistration.Disable();
+
+            Console.WriteLine($"已还原桌面图标：{recovery}");
+            Console.WriteLine($"已移除开机自启：{(StartupRegistration.ReadValue() is null ? "是" : "否（仍有残留）")}");
+            Shutdown(0);
+            return;
+        }
+
         if (options.DumpMonitors)
         {
             var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
@@ -304,7 +320,8 @@ internal sealed record SpikeOptions(
     bool Soak = false,
     double? SoakMinutes = null,
     double? SoakIntervalSeconds = null,
-    bool SoakSelfTest = false)
+    bool SoakSelfTest = false,
+    bool RestoreOnExit = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
@@ -336,7 +353,8 @@ internal sealed record SpikeOptions(
         Soak: Has(args, "--soak"),
         SoakMinutes: NumberOf(args, "--soak"),
         SoakIntervalSeconds: NumberOf(args, "--soak-interval"),
-        SoakSelfTest: Has(args, "--selftest-soak"));
+        SoakSelfTest: Has(args, "--selftest-soak"),
+        RestoreOnExit: Has(args, "--restore-on-exit"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
