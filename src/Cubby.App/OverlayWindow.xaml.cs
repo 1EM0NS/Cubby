@@ -1,8 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using System.Windows.Media;
+using Cubby.App.Views;
 using Cubby.Core;
+using Cubby.Core.Layout;
 using Cubby.Core.Model;
 using Cubby.Shell.Diagnostics;
 using Cubby.Shell.Overlay;
@@ -10,14 +11,14 @@ using Cubby.Shell.Overlay;
 namespace Cubby.App;
 
 /// <summary>
-/// 浮层窗口：一台显示器一个实例，覆盖该显示器的完整物理范围。
-/// 它同时是：
-/// 1. 被验证的对象——逐像素 alpha 与区域窗口两种命中机制；
-/// 2. 自动化的观测点——统计自己收到了多少次左键，用来证明「盒子内确实被拦截」或「确实没被拦截」。
+/// 浮层窗口：一台显示器一个实例，覆盖该显示器的完整物理范围，承载该屏上的所有盒子。
 ///
-/// 命名说明：类名沿用了 spike 阶段的叫法，真正的产品化改造（盒子交互、布局接线）在 issue #6 里做。
+/// 它同时是：
+/// 1. 产品界面——盒子在这里渲染与交互；
+/// 2. 被验证的对象——逐像素 alpha 与区域窗口两种命中机制；
+/// 3. 自动化的观测点——统计自己收到了多少次左键，用来证明「盒子内确实被拦截」或「确实没被拦截」。
 /// </summary>
-public partial class SpikeWindow : Window
+public partial class OverlayWindow : Window
 {
     private const int WmLeftButtonDown = 0x0201;
     private const int WmRightButtonDown = 0x0204;
@@ -25,13 +26,26 @@ public partial class SpikeWindow : Window
     private const int WmDpiChanged = 0x02E0;
 
     private readonly List<Box> _boxes;
+    private readonly Dictionary<string, BoxView> _views = new();
+    private readonly StyleSettings _style;
+    private readonly IBoxChangeSink _sink;
 
-    public SpikeWindow(MonitorSurface surface, IReadOnlyList<Box> boxes)
+    internal OverlayWindow(
+        MonitorSurface surface,
+        IReadOnlyList<Box> boxes,
+        StyleSettings style,
+        IBoxChangeSink sink)
     {
         InitializeComponent();
 
         Surface = surface;
         _boxes = [.. boxes];
+        _style = style.Normalized();
+        _sink = sink;
+
+        // 诊断用：区分「Win32 层收到了点击」与「WPF 层路由到了元素」。
+        // 这两个计数不一致时，问题一定在命中测试或视觉树，而不是输入本身。
+        PreviewMouseLeftButtonDown += (_, _) => WpfMouseDownCount++;
     }
 
     /// <summary>显示状态发生变化（分辨率 / DPI / 显示器增减），由 OverlayManager 决定如何处理。</summary>
@@ -46,10 +60,15 @@ public partial class SpikeWindow : Window
     /// <summary>盒子换算成物理像素后的命中矩形。</summary>
     public IReadOnlyList<PixelRect> Regions { get; private set; } = [];
 
-    /// <summary>浮层收到的左键按下次数。</summary>
     public int OverlayClickCount { get; private set; }
 
     public int OverlayRightClickCount { get; private set; }
+
+    public int BoxVisualCount => _views.Count;
+
+    public int WpfMouseDownCount { get; private set; }
+
+    public void ResetWpfMouseCount() => WpfMouseDownCount = 0;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -79,11 +98,12 @@ public partial class SpikeWindow : Window
         base.OnClosed(e);
     }
 
-    /// <summary>换一组盒子（布局变化时调用），会同步重算命中区域。</summary>
+    /// <summary>换一组盒子（布局重新加载时调用）。</summary>
     public void UpdateBoxes(IReadOnlyList<Box> boxes)
     {
         _boxes.Clear();
         _boxes.AddRange(boxes);
+        RenderBoxes();
         RefreshRegions();
     }
 
@@ -92,8 +112,15 @@ public partial class SpikeWindow : Window
     {
         Surface = surface;
         Host?.Attach(surface);
+        RenderBoxes();
         RefreshRegions();
         Host?.EnsureBehind();
+    }
+
+    /// <summary>全局样式变化后重新渲染所有盒子。</summary>
+    public void ApplyStyle()
+    {
+        RenderBoxes();
     }
 
     /// <summary>切换命中机制并重绘。</summary>
@@ -114,7 +141,7 @@ public partial class SpikeWindow : Window
 
     public void ResetClickCount() => OverlayClickCount = 0;
 
-    /// <summary>生成探测采样点：盒子中心（期望拦截）+ 右侧透明区（期望放行）。</summary>
+    /// <summary>生成探测采样点：盒子中心（期望拦截）+ 透明区（期望放行）。</summary>
     public IReadOnlyList<SamplePoint> SamplePoints()
     {
         var surface = Surface ?? throw new InvalidOperationException("窗口尚未初始化");
@@ -123,10 +150,16 @@ public partial class SpikeWindow : Window
         foreach (var box in _boxes)
         {
             var physical = surface.ToPhysical(box.Bounds);
+
+            // 取标题栏下方的条目区中心：折叠状态下没有条目区，就退回标题栏中心
+            var centerY = box.IsCollapsed
+                ? physical.Top + (int)(BoxGeometry.TitleBarHeight * surface.DpiScale / 2)
+                : (physical.Top + physical.Bottom) / 2;
+
             points.Add(new SamplePoint(
                 $"盒子 {box.Name} 中心",
                 (physical.Left + physical.Right) / 2,
-                (physical.Top + physical.Bottom) / 2,
+                centerY,
                 ExpectOurs: true,
                 Note: "该点应被浮层拦截，并注入一次左键验证"));
         }
@@ -157,6 +190,50 @@ public partial class SpikeWindow : Window
     public string DescribeRegions() =>
         Regions.Count == 0 ? "（无）" : string.Join("、", Regions.Select(r => r.ToString()));
 
+    private void RenderBoxes()
+    {
+        BoxLayer.Children.Clear();
+        _views.Clear();
+
+        foreach (var box in _boxes)
+        {
+            var view = new BoxView(box, _style, Surface!);
+            view.BoxChanged += OnBoxViewChanged;
+            view.ItemOpenRequested += (_, item) => _sink.OnItemOpen(item);
+
+            Canvas.SetLeft(view, box.Bounds.X);
+            Canvas.SetTop(view, box.Bounds.Y);
+
+            BoxLayer.Children.Add(view);
+            _views[box.Id] = view;
+        }
+    }
+
+    private void OnBoxViewChanged(object? sender, Box updated)
+    {
+        var index = _boxes.FindIndex(b => b.Id == updated.Id);
+        if (index < 0)
+        {
+            return;
+        }
+
+        _boxes[index] = updated;
+
+        if (_views.TryGetValue(updated.Id, out var view))
+        {
+            if (!ReferenceEquals(view, sender))
+            {
+                view.Update(updated);
+            }
+
+            Canvas.SetLeft(view, updated.Bounds.X);
+            Canvas.SetTop(view, updated.Bounds.Y);
+        }
+
+        _sink.OnBoxChanged(updated);
+        RefreshRegions();
+    }
+
     private void RefreshRegions()
     {
         if (Surface is null)
@@ -165,56 +242,12 @@ public partial class SpikeWindow : Window
         }
 
         Regions = HitRegion.ToPhysical(_boxes, Surface);
-        Host?.SetMode(Host.Mode, Regions, rounded: false);
-        RenderBoxes();
-    }
 
-    private void RenderBoxes()
-    {
-        BoxLayer.Children.Clear();
-
-        foreach (var box in _boxes)
+        // 逐像素 alpha 模式下命中完全由像素透明度决定，不需要反复设置窗口区域；
+        // 只有"区域模式"才必须跟着盒子一起更新。
+        if (Host is { Mode: HitMode.WindowRegion })
         {
-            var border = new Border
-            {
-                Width = box.Bounds.Width,
-                Height = box.Bounds.Height,
-                Background = new SolidColorBrush(Color.FromArgb(0xCC, 0x1F, 0x2A, 0x37)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x0F, 0xDC, 0x78)),
-                BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(16),
-            };
-
-            var stack = new StackPanel();
-            stack.Children.Add(new TextBlock
-            {
-                Text = box.Name,
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xE5, 0xE5, 0xE5)),
-                FontSize = 16,
-                FontWeight = FontWeights.Medium,
-                TextWrapping = TextWrapping.Wrap,
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = $"DIP ({box.Bounds.X:0},{box.Bounds.Y:0})  {box.Bounds.Width:0}×{box.Bounds.Height:0}",
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xA1, 0xA1, 0xAA)),
-                FontSize = 12,
-                Margin = new Thickness(0, 6, 0, 0),
-            });
-            stack.Children.Add(new TextBlock
-            {
-                Text = "盒子内应该能收到点击；盒子外（透明区）的点击必须原样落到桌面。",
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xA1, 0xA1, 0xAA)),
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 12, 0, 0),
-            });
-
-            border.Child = stack;
-            Canvas.SetLeft(border, box.Bounds.X);
-            Canvas.SetTop(border, box.Bounds.Y);
-            BoxLayer.Children.Add(border);
+            Host.SetMode(HitMode.WindowRegion, Regions, rounded: false);
         }
     }
 

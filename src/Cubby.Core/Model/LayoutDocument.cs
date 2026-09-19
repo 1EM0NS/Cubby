@@ -13,6 +13,9 @@ public sealed record LayoutDocument
 
     public IReadOnlyList<Box> Boxes { get; init; } = [];
 
+    /// <summary>全局样式与新建盒子的默认值。</summary>
+    public StyleSettings Style { get; init; } = new();
+
     /// <summary>保存时记录在案的显示器清单，用于布局还原时做匹配。</summary>
     public IReadOnlyList<MonitorSurface> Monitors { get; init; } = [];
 

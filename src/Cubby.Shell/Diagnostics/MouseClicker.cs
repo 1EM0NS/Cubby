@@ -59,27 +59,52 @@ public static class MouseClicker
     /// <summary>在光标当前所在位置按一次左键。</summary>
     public static bool LeftClick()
     {
-        var inputs = new[]
-        {
-            new NativeMethods.Input
-            {
-                Type = NativeMethods.InputMouse,
-                Union = new NativeMethods.InputUnion
-                {
-                    Mouse = new NativeMethods.MouseInput { Flags = NativeMethods.MouseeventfLeftDown },
-                },
-            },
-            new NativeMethods.Input
-            {
-                Type = NativeMethods.InputMouse,
-                Union = new NativeMethods.InputUnion
-                {
-                    Mouse = new NativeMethods.MouseInput { Flags = NativeMethods.MouseeventfLeftUp },
-                },
-            },
-        };
+        var sent = Send(new[] { NativeMethods.MouseeventfLeftDown, NativeMethods.MouseeventfLeftUp });
+        return sent;
+    }
 
-        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.Input>());
+    public static bool LeftButtonDown() => Send([NativeMethods.MouseeventfLeftDown]);
+
+    public static bool LeftButtonUp() => Send([NativeMethods.MouseeventfLeftUp]);
+
+    /// <summary>
+    /// 按住左键从一点拖到另一点，用于交互验收。
+    /// 分步移动是必要的：WPF 只有在收到连续的 MouseMove 时才会跟随更新，
+    /// 一步跳到终点只会产生一次移动事件，拖动逻辑看起来就像"没反应"。
+    /// </summary>
+    public static async Task DragAsync(int fromX, int fromY, int toX, int toY, int steps = 6)
+    {
+        MoveTo(fromX, fromY);
+        await Task.Delay(120);
+
+        LeftButtonDown();
+
+        for (var i = 1; i <= steps; i++)
+        {
+            MoveTo(fromX + ((toX - fromX) * i / steps), fromY + ((toY - fromY) * i / steps));
+            await Task.Delay(40);
+        }
+
+        await Task.Delay(60);
+        LeftButtonUp();
+    }
+
+    private static bool Send(uint[] flags)
+    {
+        var inputs = flags.Select(flag => new NativeMethods.Input
+        {
+            Type = NativeMethods.InputMouse,
+            Union = new NativeMethods.InputUnion
+            {
+                Mouse = new NativeMethods.MouseInput { Flags = flag },
+            },
+        }).ToArray();
+
+        var sent = NativeMethods.SendInput(
+            (uint)inputs.Length,
+            inputs,
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.Input>());
+
         return sent == inputs.Length;
     }
 }
