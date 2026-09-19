@@ -95,6 +95,52 @@ public sealed class LayoutStoreTests : IDisposable
     }
 
     [Fact]
+    public void 反复覆盖保存后文件始终可解析()
+    {
+        var store = new LayoutStore(_filePath);
+
+        for (var round = 0; round < 5; round++)
+        {
+            var document = SampleDocument() with
+            {
+                Boxes = [new Box("b1", $"第 {round} 轮", new DipRect(round, round, 100, 100))],
+            };
+
+            store.Save(document);
+
+            // 每一轮保存之后都必须立刻是一份完整可解析的文件：这正是「先写 .tmp 再 File.Replace」的意义
+            var loaded = store.Load();
+            Assert.Null(store.LastLoadDiagnostic);
+            Assert.Equal($"第 {round} 轮", loaded.Boxes[0].Name);
+            Assert.False(File.Exists(_filePath + ".tmp"));
+        }
+    }
+
+    [Fact]
+    public void 写入中途被杀留下半个临时文件_不影响主文件的解析()
+    {
+        var store = new LayoutStore(_filePath);
+        store.Save(SampleDocument());
+
+        // 模拟「正在写 .tmp 时被强杀」：磁盘上留下一个截断的临时文件
+        File.WriteAllText(_filePath + ".tmp", "{ \"SchemaVersion\": 1, \"Boxes\": [ { \"Id\"");
+
+        var loaded = store.Load();
+
+        Assert.Null(store.LastLoadDiagnostic);
+        Assert.Equal("工作区", loaded.Boxes[0].Name);
+
+        // 残留的临时文件不该把下一次保存带坏
+        store.Save(SampleDocument());
+
+        var reopened = new LayoutStore(_filePath);
+        var after = reopened.Load();
+        Assert.Null(reopened.LastLoadDiagnostic);
+        Assert.Equal("工作区", after.Boxes[0].Name);
+        Assert.False(File.Exists(_filePath + ".tmp"));
+    }
+
+    [Fact]
     public void 首次保存不产生备份文件()
     {
         var store = new LayoutStore(_filePath);
