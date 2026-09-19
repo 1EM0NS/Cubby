@@ -30,6 +30,7 @@
 2. 提交信息用 Conventional Commits：`type(scope): 简述`，type 与 scope 用英文，正文可用中文
 3. 每个功能一个闭环：Issue → 分支 → 实现 → 本地跑回归清单 → PR（写清"怎么验证的 + 实际结果"）→ CI 绿 → 合并关 Issue
 4. **每次会话结束必须往 `docs/工作日志.md` 追加一条记录**（最新在最上），包含：目标、做了什么、验证与证据、遗留与下一步。**禁止修改历史条目。**
+   日志补记可直接提 PR，不必单独开 Issue；只有功能与修复类改动才必须挂 Issue。
 5. 跨过里程碑门禁才打 tag：M0 → `0.1.0`，M1 → `0.2.0`，M2 → `0.3.0`，M3 → `1.0.0`
 
 ## 环境注意事项（都是踩过的坑）
@@ -42,6 +43,8 @@
   3. 读无 BOM 的 UTF-8 脚本会按 ANSI 解析，中文直接报语法错误
   → **结论：给 `gh` 传中文内容一律用 `--body-file` 传文件；`.ps1` 存盘时带 BOM。**
 - 本机没装 `pwsh`（PowerShell 7），CI 的 `windows-latest` 上有。
+- **`gh pr merge --squash --delete-branch` 不会自动切回本地 `main`**：合并后本地仍停在已被删除的分支上，紧接着 `git pull` 会报 `no such ref was fetched`，很容易误判为"合并失败"。
+  → 判断合并结果一律以 `gh pr view <编号> --json state,mergedAt` 为准，**不要看 git 本地状态**。收尾动作：`git switch main && git pull && git branch -D <分支>`。
 
 ## 常用命令
 
