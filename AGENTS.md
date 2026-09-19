@@ -85,6 +85,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-rules        # 归类规则：五类条件命中 + 预览/应用/撤销 + 文件不动（写 rules-report.md）
 & $app --selftest-desktop-icons # 桌面图标显隐：三个入口 + 崩溃兜底 + 系统矩阵（写 desktop-icons-report.md）
 & $app --selftest-appearance   # 视觉打磨：像素级 P2 断言（盒子外 alpha=0）+ 预览图（写 appearance-report.md / appearance-preview.png）
+& $app --selftest-coexist      # 同类软件共存（A8）：造真实同名进程，证明只提示不抢占（写 coexist-report.md）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）

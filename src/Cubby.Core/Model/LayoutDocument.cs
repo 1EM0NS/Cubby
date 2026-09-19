@@ -33,4 +33,11 @@ public sealed record LayoutDocument
     /// （SysListView32 的 ShowWindow 在个别 Windows 版本上行为不稳，留这个开关做降级。）
     /// </summary>
     public bool EnableDesktopIconToggle { get; init; } = true;
+
+    /// <summary>
+    /// 用户已经确认过「知道有同类软件在跑、仍要继续用 Cubby」的进程名（A8）。
+    /// 记的是进程名而不是"显示过提示"这个布尔值：这样**后来新装了另一个同类软件**仍会再提示一次，
+    /// 而不会因为"提示过就不再提示"把新冲突咽掉。
+    /// </summary>
+    public IReadOnlyList<string> CoexistAcknowledgedTools { get; init; } = [];
 }

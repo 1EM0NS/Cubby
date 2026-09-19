@@ -1,0 +1,65 @@
+<Window x:Class="Cubby.App.CoexistWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cubby · 检测到同类桌面软件"
+        Width="620"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        Style="{StaticResource Cubby.Window}"
+        WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="22">
+
+        <StackPanel Orientation="Horizontal">
+            <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource Cubby.Brush.AccentDeep}"
+                    VerticalAlignment="Top">
+                <TextBlock Text="&#xE7BA;"
+                           FontFamily="{StaticResource Cubby.Font.Icon}"
+                           FontSize="16"
+                           Foreground="{StaticResource Cubby.Brush.Warn}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="检测到同类桌面软件正在运行" FontSize="16" FontWeight="SemiBold" />
+                <TextBlock x:Name="SummaryText"
+                           Margin="0,4,0,0"
+                           Style="{StaticResource Cubby.Caption}" />
+            </StackPanel>
+        </StackPanel>
+
+        <Border Style="{StaticResource Cubby.Card}" Margin="0,16,0,0" Padding="12">
+            <ItemsControl x:Name="ToolList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,4">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Why}" Style="{StaticResource Cubby.Caption}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <TextBlock Margin="0,16,0,0"
+                   Style="{StaticResource Cubby.Caption}"
+                   Text="两者都在接管桌面图标，同时开着可能互相抢桌面（表现为图标乱跳、点了没反应）。建议二选一。" />
+
+        <TextBlock Margin="0,8,0,0"
+                   Style="{StaticResource Cubby.Caption}"
+                   Foreground="{StaticResource Cubby.Brush.Text}"
+                   Text="Cubby 只做提示：不会结束对方的进程，也不会改动对方的窗口或功能。" />
+
+        <CheckBox x:Name="RememberBox"
+                  Margin="0,16,0,0"
+                  Content="知道了，不再提示（以后装了别的同类软件仍会提示）" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="OkButton"
+                    Style="{StaticResource Cubby.Button.Primary}"
+                    Content="我知道了"
+                    Width="110"
+                    IsDefault="True"
+                    Click="OnOk" />
+        </StackPanel>
+    </StackPanel>
+</Window>
