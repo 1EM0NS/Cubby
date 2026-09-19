@@ -187,6 +187,9 @@ public partial class OverlayWindow : Window
         return points;
     }
 
+    /// <summary>按盒子 Id 取视图。供自动化验收直接驱动某个盒子的交互（如拖入）。</summary>
+    internal BoxView? ViewOf(string boxId) => _views.TryGetValue(boxId, out var view) ? view : null;
+
     public string DescribeRegions() =>
         Regions.Count == 0 ? "（无）" : string.Join("、", Regions.Select(r => r.ToString()));
 

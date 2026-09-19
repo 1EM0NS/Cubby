@@ -75,6 +75,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 
 & $app --selftest              # 命中测试：盒子内拦截、盒子外穿透（写 hittest-summary.md）
 & $app --selftest-interact     # 盒子交互：拖动 / 缩放 / 折叠 / 锁定（写 interaction-report.md）
+& $app --selftest-drop         # 拖入：生成引用 + 原文件指纹不变（写 drop-report.md）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-state            # 运行状态：盒子渲染数量、命中区域、Win32/WPF 鼠标计数（写 state.txt）
 & $app                         # 无参 = 交互式诊断面板

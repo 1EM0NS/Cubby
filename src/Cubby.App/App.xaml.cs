@@ -42,7 +42,7 @@ public partial class App : Application
         var manager = new OverlayManager(layout);
         manager.Start();
 
-        if (options.SelfTest || options.Interact)
+        if (options.SelfTest || options.Interact || options.Drop)
         {
             var overlay = manager.PrimaryWindow;
             if (overlay is null)
@@ -63,7 +63,9 @@ public partial class App : Application
                 started = true;
                 var exitCode = options.SelfTest
                     ? await SelfTestRunner.RunAsync(overlay, options)
-                    : await InteractionTestRunner.RunAsync(overlay, layout, options);
+                    : options.Interact
+                        ? await InteractionTestRunner.RunAsync(overlay, layout, options)
+                        : await DropTestRunner.RunAsync(overlay, layout, options);
 
                 Shutdown(exitCode);
             };
@@ -113,14 +115,15 @@ public partial class App : Application
 }
 
 /// <summary>命令行参数。</summary>
-internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact)
+internal sealed record SpikeOptions(bool SelfTest, string? OutputDirectory, bool DumpMonitors, bool DumpState, bool Interact, bool Drop = false)
 {
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
         OutputDirectory: ValueOf(args, "--out"),
         DumpMonitors: Has(args, "--dump-monitors"),
         DumpState: Has(args, "--dump-state"),
-        Interact: Has(args, "--selftest-interact"));
+        Interact: Has(args, "--selftest-interact"),
+        Drop: Has(args, "--selftest-drop"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
