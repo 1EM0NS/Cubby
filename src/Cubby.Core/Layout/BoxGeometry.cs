@@ -13,8 +13,12 @@ public static class BoxGeometry
 
     public const double MinHeight = 90;
 
-    /// <summary>按钮栏高度：折叠状态下盒子会收缩到这个高度。</summary>
-    public const double TitleBarHeight = 34;
+    /// <summary>
+    /// 按钮栏高度：折叠状态下盒子会收缩到这个高度。
+    /// **必须与 BoxView.xaml 里 TitleBar 的高度一致**——不然折叠态的绘制会溢出盒子矩形，
+    /// 而盒子外的像素一旦非零就会抢走桌面的点击（P2）。
+    /// </summary>
+    public const double TitleBarHeight = 36;
 
     /// <summary>拖动移动：夹取在显示器范围内。</summary>
     public static DipRect MoveTo(DipRect current, double deltaX, double deltaY, double monitorWidth, double monitorHeight)

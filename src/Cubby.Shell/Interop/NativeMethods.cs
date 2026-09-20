@@ -38,6 +38,47 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool ShowWindow(nint hwnd, int cmdShow);
 
+    // ---- shell 文件图标（只读查询，见 FileIconSource）----
+
+    internal const uint ShgfiIcon = 0x00000100;
+    internal const uint ShgfiLargeIcon = 0x00000000;
+    internal const uint ShgfiSmallIcon = 0x00000001;
+
+    /// <summary>路径可以不存在，按扩展名给通用图标（盒子里的条目可能已被删除）。</summary>
+    internal const uint ShgfiUseFileAttributes = 0x00000010;
+
+    internal const uint FileAttributeNormal = 0x00000080;
+    internal const uint FileAttributeDirectory = 0x00000010;
+
+    /// <summary>SHGetFileInfo 的输出。两个字符串字段是定长内联字符数组，**必须先初始化**（同 MonitorInfoEx）。</summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct ShFileInfo
+    {
+        internal nint Icon;
+        internal int IconIndex;
+        internal uint Attributes;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        internal string DisplayName;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+        internal string TypeName;
+    }
+
+    /// <summary>取文件 / 文件夹关联的 shell 图标句柄。只读查询，不碰任何窗口与桌面状态。</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHGetFileInfoW")]
+    internal static extern nint SHGetFileInfo(
+        string path,
+        uint fileAttributes,
+        ref ShFileInfo info,
+        uint infoSize,
+        uint flags);
+
+    /// <summary>释放 SHGetFileInfo 给出的图标句柄。漏掉它会把 GDI 对象数顶上去（A7 盯的就是这项）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyIcon(nint icon);
+
     internal const int RgnOr = 2;
 
     // ---- 跨进程读取桌面图标（只读，见 DesktopIcons）----

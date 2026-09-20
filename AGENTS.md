@@ -191,6 +191,8 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）
 & $app --dump-desktop-icons    # 桌面图标读取明细：名称 / 坐标 / 匹配到的文件（写 desktop-icons.txt）
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）
+& $app --render-preview       # 离屏渲染设计复核图 + P2 自检（写 design-preview.png），**全程不显示任何窗口**
+& $app --render-preview --out <目录>   # 指定输出目录，便于前后对比
 & $app --diagnostics           # 常驻托盘 + 打开诊断面板
 & $app                         # 无参 = 常驻形态（只有托盘图标，不占任务栏）
 & $app --restore-on-exit       # 卸载前的收尾：还原桌面图标标记 + 移除开机自启，然后退出（幂等）
@@ -227,6 +229,34 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
   若立刻把归属改成主屏，屏一回来盒子就永远留在主屏了——那正是 #5「副屏唤醒后不跑到主屏」要防的。
   归属真正改掉的时机是**用户自己拖它**（`OverlayManager.OnBoxChanged` → `PinToActualMonitor`），
   那是唯一能确定"它就该在这块屏上"的信号。
+
+### 视觉规范：盒子要像"桌面的一部分"，不像"某个软件画的方块"
+
+上一版被用户当场否掉（原话："太丑陋了…好诡异啊"）。原因不是没调好，而是**方向反了**：
+一切都在自创，而不是融进系统。对照同类开源项目（DeskBox / PecoFence / Desktop Frames+）后定了这几条：
+
+- **融进系统视觉，别自创一套。** 三个同类项目分别用 WinUI 3 原生材质、Fluent / Liquid Glass
+  双风格、跟随壁纸取色——共同点是"看起来像 Windows 的一部分"。
+- **图标一律用 shell 的真实图标**（`Cubby.Shell/Desktop/FileIconSource.cs` +
+  `Cubby.App/Views/FileIconCache.cs`），不自己画。用字母方块（DIR / PNG / DOCX…）代替图标
+  是最容易被一眼看穿的"自绘感"——那看起来像调试界面而不是文件。拿不到才降级，
+  且降级必须是**中性**的（按类型上色会让一排图标变成一块调色板）。
+- **常驻元素保持中性。** 盒子不画状态色边框、不画贯穿到底的彩色竖条：上一版用荧光绿
+  （#0FDC78）包一整圈，桌面上一看像"全都被选中了"。层级交给描边明度差，状态信息交给
+  标题栏图标 + 一条只在需要时出现的**短**强调条（锁定 / 映射）。
+- **色板对齐 Windows 11 深色模式**：底是中性灰 #202020 一族（**不是**带蓝的深黑，
+  带蓝的底跟系统摆在一起会显"脏"），强调色是系统浅蓝 #4CC2FF（不是荧光绿）。桌面是用户的，
+  工具不该在别人的墙上刷自己的漆。
+- **圆角按规范**：顶层容器 8 / 控件 4 / 嵌套 6→4；`StyleSettings.CornerRadius` 默认 8，
+  且**必须与 `BoxView.xaml` 里 TitleBar 的高度同步**（`BoxGeometry.TitleBarHeight`），
+  不同步会让折叠态的绘制溢出盒子矩形 → 直接破坏 P2。
+- **玻璃感靠"顶部受光 + 上亮下暗的渐变"**，绝不用 `DropShadowEffect` / `BlurEffect`——
+  那些会向外扩散 alpha，破坏 P2。
+- **一句话要占满整行。** 空盒子的引导一度被固定成一个格子的宽度，
+  "只登记引用，不移动文件"被硬折成三行——一句话被折断就不成话了。
+
+**改视觉前后各跑一次 `--render-preview`。** 它离屏渲染、不显示任何窗口，
+所以调样式时不会打扰正在用电脑的人；同时做 P2 自检（外扩带必须全透明），退出码 0 = 渲染成功且 P2 通过。
 
 ### `LayoutProbe` 只做逻辑，端到端仍是人工项
 
