@@ -93,15 +93,27 @@ internal sealed class OverlayManager : IBoxChangeSink
     public void Start() => Rebuild("启动");
 
     /// <summary>重新枚举显示器并按布局重建浮层。可由界面按钮手动触发，也会被显示变化事件触发。</summary>
-    public void Rebuild(string reason)
+    public void Rebuild(string reason) => Rebuild(reason, MonitorSurfaces.Enumerate());
+
+    /// <summary>
+    /// 用给定的显示器集合重建。生产路径始终传系统枚举结果，这个重载是为**验收**准备的：
+    /// 要验证「拔掉副屏」「副屏回来」这类拓扑变化，正确做法不是去改系统的显示设置
+    /// （那会动到用户的桌面），而是只传入系统枚举结果的**子集**来复刻那一刻的真实拓扑。
+    /// 也就是说传进来的必须是真实存在的显示器——窗口仍然是真的，只是少了或多了几块屏。
+    /// </summary>
+    public void Rebuild(string reason, IReadOnlyList<MonitorSurface> monitors)
     {
         CloseAll();
 
-        Monitors = MonitorSurfaces.Enumerate();
+        Monitors = monitors;
         _layout.EnsureDefaults(Monitors);
         _layout.UpdateMonitors(Monitors);
 
         Plans = OverlayPlanner.Plan(Monitors, _layout.Boxes);
+
+        // 先把归属与坐标的修正落盘，再建窗口：窗口拿到的是修正后的盒子，
+        // 而落盘必须发生在建窗口之前，否则中途一旦出错，界面与文件就会不一致
+        PersistPlacement();
 
         foreach (var plan in Plans)
         {
@@ -133,6 +145,47 @@ internal sealed class OverlayManager : IBoxChangeSink
         _search.RebuildAll(_layout.Boxes);
 
         AppendRebuildLog(reason);
+    }
+
+    /// <summary>
+    /// 把这一轮的「盒子归哪块屏」「坐标要不要挪」写回布局。
+    ///
+    /// 写回策略里有一条是刻意的取舍：**原显示器不在了（Fallback）时只挪坐标、不改归属**。
+    /// 因为「枚举不到某块屏」既可能是它真的被拔了，也可能只是它睡着了/正在重排——
+    /// 若立刻把归属改成主屏，屏一回来盒子就永远留在主屏了，而那正是 issue #5
+    /// 「副屏唤醒后盒子不跑到主屏」要防的事。
+    /// 归属真正改掉的时机是**用户自己动手拖它**（见 <see cref="OnBoxChanged"/>）：
+    /// 那是唯一能确定"这就是我要的位置"的信号。
+    /// </summary>
+    private void PersistPlacement()
+    {
+        foreach (var plan in Plans)
+        {
+            foreach (var planned in plan.Boxes)
+            {
+                var current = _layout.Boxes.FirstOrDefault(b => b.Id == planned.Box.Id);
+                if (current is null)
+                {
+                    continue;
+                }
+
+                // 原屏已不在：只采纳坐标修正，归属与记录的屏幕尺寸都保持不动（等它回来）
+                var updated = planned.Kind == MonitorMatchKind.Fallback
+                    ? current with { Bounds = planned.Box.Bounds }
+                    : current with
+                    {
+                        Bounds = planned.Box.Bounds,
+                        MonitorId = plan.Monitor.Id,
+                        MonitorWidth = plan.Monitor.Bounds.Width,
+                        MonitorHeight = plan.Monitor.Bounds.Height,
+                    };
+
+                if (updated != current)
+                {
+                    _layout.UpdateBox(updated);
+                }
+            }
+        }
     }
 
     public void Stop()
@@ -221,13 +274,39 @@ internal sealed class OverlayManager : IBoxChangeSink
 
     public void OnBoxChanged(Box box)
     {
-        _layout.UpdateBox(box);
+        // 用户动手了（拖动 / 改尺寸）——这时把盒子归属到它**实际所在的**那块屏。
+        // 这是唯一能确定"它就该在这块屏上"的信号；自动回退时不动归属，
+        // 否则副屏睡一觉回来，盒子就被永久留在主屏了（见 PersistPlacement）。
+        var pinned = PinToActualMonitor(box);
+        _layout.UpdateBox(pinned);
 
         // 条目可能变了（拖入 / 移出 / 重命名），索引跟上
-        _search.RebuildBox(box);
+        _search.RebuildBox(pinned);
 
         // 映射关系可能刚被建立或解除，让同步器跟上
         _mapping.Sync(_layout.Boxes);
+    }
+
+    /// <summary>把盒子归属到当前承载它的那块屏；没找到（比如盒子刚被删）就原样返回。</summary>
+    private Box PinToActualMonitor(Box box)
+    {
+        foreach (var window in _windows)
+        {
+            var surface = window.Surface;
+            if (surface is null || !window.Boxes.Any(b => b.Id == box.Id))
+            {
+                continue;
+            }
+
+            return box with
+            {
+                MonitorId = surface.Id,
+                MonitorWidth = surface.Bounds.Width,
+                MonitorHeight = surface.Bounds.Height,
+            };
+        }
+
+        return box;
     }
 
     public void OnItemOpen(BoxItem item)
@@ -335,11 +414,16 @@ internal sealed class OverlayManager : IBoxChangeSink
             var directory = Path.Combine(AppContext.BaseDirectory, "artifacts");
             Directory.CreateDirectory(directory);
 
+            var notes = Plans
+                .SelectMany(plan => plan.Notes.Select(note => $"{plan.Monitor.Id}: {note}"))
+                .ToList();
+
             var line =
                 $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} | {reason,-22} | " +
                 $"显示器 {Monitors.Count} 台 | 浮层窗口 {_windows.Count} 个 | " +
                 $"盒子 {_layout.Boxes.Count} 个 | " +
                 string.Join(" ; ", Monitors.Select(m => $"{m.Id} {m.Bounds.Width}x{m.Bounds.Height}@{m.DpiScale:0.##}")) +
+                (notes.Count > 0 ? " || " + string.Join(" ; ", notes) : string.Empty) +
                 Environment.NewLine;
 
             File.AppendAllText(

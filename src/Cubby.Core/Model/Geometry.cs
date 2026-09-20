@@ -32,6 +32,15 @@ public sealed record MonitorSurface(string Id, PixelRect Bounds, double DpiScale
     /// <summary>是否为主显示器。用于「显示器没了」时的兜底选择，保证结果稳定可预期。</summary>
     public bool IsPrimary { get; init; }
 
+    /// <summary>
+    /// 本屏在 DIP 下的可用范围，原点为本屏左上角。
+    /// 盒子的 <see cref="DipRect"/> 就活在这个空间里，所以「盒子放不放得下」要用它来判断：
+    /// 同一块屏换分辨率、或换一块 DPI 更高的屏，这个范围都会变小，而盒子的 DIP 坐标不会自己跟着缩。
+    /// </summary>
+    public DipRect DipExtent =>
+        DpiScale <= 0 ? new DipRect(0, 0, Bounds.Width, Bounds.Height)
+                      : new DipRect(0, 0, Bounds.Width / DpiScale, Bounds.Height / DpiScale);
+
     /// <summary>把该显示器上的 DIP 矩形换算为虚拟屏幕物理像素矩形。</summary>
     public PixelRect ToPhysical(DipRect dip) => new(
         Bounds.Left + (int)Math.Round(dip.X * DpiScale),
