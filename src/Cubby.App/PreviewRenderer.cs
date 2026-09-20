@@ -29,50 +29,66 @@ internal sealed record PreviewResult(string Path, bool NoBleed, string BleedDeta
 
 internal static class PreviewRenderer
 {
-    private const double Gap = 28;
-
     public static PreviewResult Render(string outputDirectory)
     {
         var surface = new MonitorSurface("preview", new PixelRect(0, 0, 2560, 1440), 1.0) { IsPrimary = true };
         var style = new StyleSettings { CornerRadius = 8, Columns = 4, FontSize = 13, Opacity = 0.85 };
-
         var boxes = SampleBoxes();
-        var heights = boxes.Select(BoxGeometry.EffectiveHeight).ToList();
 
-        // 菜单要先量出来，才能算画布高度。
-        // ContextMenu 默认是 Collapsed，不显式打开就量不出尺寸（DesiredSize 会是 0）
-        var menu = BuildSampleMenu();
-        menu.Visibility = Visibility.Visible;
-        menu.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var menuSize = menu.DesiredSize;
+        // ---- 第一遍：P2 自检。关掉壁纸底层，在透明画布上查盒子外的像素 ----
+        // （壁纸底层本身只在盒子矩形内绘制，但自检要的是"极端情况下也不外溢"的证据）
+        WallpaperBackdrop.Enabled = false;
 
-        var width = Math.Max(boxes.Max(b => b.Bounds.Width), menuSize.Width) + (Gap * 2);
-        var height = heights.Sum() + menuSize.Height + (Gap * (boxes.Count + 2));
+        var details = new List<string>();
+        var noBleed = true;
+
+        foreach (var box in boxes)
+        {
+            var (clear, detail) = CheckNoBleed(box, style, surface);
+            noBleed &= clear;
+            details.Add($"{box.Name} — {detail}");
+        }
+
+        WallpaperBackdrop.Enabled = true;
+
+        // ---- 第二遍：视觉图。画布 = 用户真实壁纸，盒子摆在真实桌面坐标上，
+        //      亚克力底层裁的就是那里的壁纸——图上看到的跟用户桌面上的一模一样 ----
+        var path = RenderVisual(boxes, style, surface, outputDirectory);
+
+        return new PreviewResult(path, noBleed, string.Join("；", details), DescribeIcons(boxes));
+    }
+
+    private static string RenderVisual(
+        IReadOnlyList<Box> boxes, StyleSettings style, MonitorSurface surface, string outputDirectory)
+    {
+        const double width = 2560;
+        const double height = 1440;
 
         var canvas = new Canvas { Width = width, Height = height };
 
-        canvas.Background = new LinearGradientBrush
-        {
-            StartPoint = new Point(0, 0),
-            EndPoint = new Point(1, 0),
-            GradientStops =
+        // 画布背景 = 用户真实壁纸（没有壁纸则退回深浅渐变，仍能检查两种底色上的观感）
+        var wallpaper = WallpaperBackdrop.Crop(new Int32Rect(0, 0, (int)width, (int)height), expandPixels: 0);
+        canvas.Background = wallpaper is not null
+            ? new ImageBrush(wallpaper) { Stretch = Stretch.Fill }
+            : new LinearGradientBrush
             {
-                new GradientStop(Color.FromRgb(0xC3, 0xC3, 0xC3), 0),
-                new GradientStop(Color.FromRgb(0x60, 0x60, 0x60), 0.5),
-                new GradientStop(Color.FromRgb(0x2A, 0x2A, 0x2A), 1),
-            },
-        };
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 0),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromRgb(0xC3, 0xC3, 0xC3), 0),
+                    new GradientStop(Color.FromRgb(0x60, 0x60, 0x60), 0.5),
+                    new GradientStop(Color.FromRgb(0x2A, 0x2A, 0x2A), 1),
+                },
+            };
 
-        var top = Gap;
-        for (var i = 0; i < boxes.Count; i++)
+        foreach (var box in boxes)
         {
-            var view = new BoxView(boxes[i], style, surface);
+            var view = new BoxView(box, style, surface);
 
-            Canvas.SetLeft(view, Gap);
-            Canvas.SetTop(view, top);
+            Canvas.SetLeft(view, box.Bounds.X);
+            Canvas.SetTop(view, box.Bounds.Y);
             canvas.Children.Add(view);
-
-            top += heights[i] + Gap;
         }
 
         // 菜单样例单独画一块，不叠在盒子上（叠上去整张图就看不清了）。
@@ -80,6 +96,10 @@ internal static class PreviewRenderer
         //
         // ⚠️ 它不能直接挂进视觉树：WPF 明确禁止 ContextMenu 有逻辑/视觉父级
         //    （抛「ContextMenu 不能有逻辑或视觉父级」）。所以先单独渲染成位图，再把位图贴上来。
+        var menu = BuildSampleMenu();
+        menu.Visibility = Visibility.Visible;
+        menu.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var menuSize = menu.DesiredSize;
         menu.Arrange(new Rect(0, 0, menuSize.Width, menuSize.Height));
         menu.UpdateLayout();
 
@@ -91,8 +111,8 @@ internal static class PreviewRenderer
             Stretch = Stretch.None,
         };
 
-        Canvas.SetLeft(menuImage, Gap);
-        Canvas.SetTop(menuImage, top);
+        Canvas.SetLeft(menuImage, 1560);
+        Canvas.SetTop(menuImage, 80);
         canvas.Children.Add(menuImage);
 
         canvas.Measure(new Size(width, height));
@@ -118,19 +138,7 @@ internal static class PreviewRenderer
             encoder.Save(stream);
         }
 
-        // 顺带做 P2 自检：盒子外的像素一旦非零就会抢走桌面与动态壁纸的点击（这是产品的立身之本）。
-        // 放在离屏做，随时可验证，而不用把浮层真的显示到用户屏幕上。
-        var details = new List<string>();
-        var noBleed = true;
-
-        foreach (var box in boxes)
-        {
-            var (clear, detail) = CheckNoBleed(box, style, surface);
-            noBleed &= clear;
-            details.Add($"{box.Name} — {detail}");
-        }
-
-        return new PreviewResult(path, noBleed, string.Join("；", details), DescribeIcons(boxes));
+        return path;
     }
 
     /// <summary>
@@ -240,7 +248,7 @@ internal static class PreviewRenderer
 
         return
         [
-            new Box("preview", "工作资料", new DipRect(0, 0, 372, 296))
+            new Box("preview", "工作资料", new DipRect(48, 56, 372, 296))
             {
                 Columns = 4,
                 Items =
@@ -256,7 +264,7 @@ internal static class PreviewRenderer
                 ],
             },
 
-            new Box("preview-mapped", "设计素材（映射）", new DipRect(0, 0, 372, 200))
+            new Box("preview-mapped", "设计素材（映射）", new DipRect(48, 480, 372, 200))
             {
                 Columns = 4,
                 MappedFolder = folder,
@@ -268,7 +276,7 @@ internal static class PreviewRenderer
                 ],
             },
 
-            new Box("preview-empty", "新盒子", new DipRect(0, 0, 372, 150))
+            new Box("preview-empty", "新盒子", new DipRect(1560, 340, 372, 150))
             {
                 Columns = 4,
                 Items = [],

@@ -84,6 +84,11 @@ public partial class BoxView : UserControl
         Root.MouseEnter += (_, _) => SetHover(true);
         Root.MouseLeave += (_, _) => SetHover(false);
 
+        // 用户在系统里换壁纸时重裁亚克力底层；卸载必须退订，否则视觉对象经静态事件泄漏
+        WallpaperBackdrop.Changed += OnWallpaperChanged;
+        Unloaded += (_, _) => WallpaperBackdrop.Changed -= OnWallpaperChanged;
+        SizeChanged += (_, _) => UpdateBackdropClip();
+
         Refresh();
     }
 
@@ -154,30 +159,58 @@ public partial class BoxView : UserControl
     }
 
     /// <summary>
-    /// 盒子的"外壳"：一层中性的半透明底 + 一圈极淡的渐变描边。
-    ///
-    /// 这里刻意**不再用状态色包一整圈边框**（上一版是荧光绿 / 黄 / 青，桌面上一看像"全都被选中了"）。
-    /// 层级交给描边的明度差表达，状态信息交给标题栏的图标——这是 Fluent 的做法：
-    /// 常驻元素保持中性，提醒只在需要时局部出现。
+    /// 盒子的"外壳"：亚克力底层（模糊壁纸 + 深色罩，借 DeskBox 的 Acrylic）+ 状态强调条。
+    /// 没有壁纸（纯色桌面）时退回实色渐变 + 极淡描边定义边界。
     ///
     /// **所有绘制都必须落在盒子矩形内**：盒子外必须保持 alpha=0，否则会抢走桌面与动态壁纸的点击（P2）。
-    /// 因此这里不用任何外扩 Effect（阴影 / 发光都会向外扩散）。立体感只靠渐变与内描边。
+    /// 模糊被圆角 Clip 严格限制在盒子矩形内；阴影等外扩效果仍然禁用。
     /// </summary>
     private void ApplyChrome(Box box)
     {
         var alpha = (byte)Math.Round(Math.Clamp(BoxStyle.Opacity, 0.2, 1.0) * 255);
 
         Root.CornerRadius = new CornerRadius(BoxStyle.CornerRadius);
-        Root.Background = BoxBackground(alpha);
+        TintPlate.CornerRadius = Root.CornerRadius;
 
-        // 描边用"上亮下暗"的极淡白，模拟玻璃边缘受光，比一圈等亮度的线自然。
-        // 下限 0x24 是为了把透明度调得很低时仍看得出盒子边界（否则就是一团没有形状的雾）
-        var edge = (byte)Math.Round(Math.Max(alpha * 0.13, 0x24) * (_hover ? 1.8 : 1.0));
-        Root.BorderBrush = new LinearGradientBrush(
-            Color.FromArgb(edge, 0xFF, 0xFF, 0xFF),
-            Color.FromArgb((byte)(edge * 0.4), 0xFF, 0xFF, 0xFF),
-            new Point(0, 0),
-            new Point(0, 1));
+        var backdrop = BackdropCrop();
+
+        if (backdrop is not null)
+        {
+            // DeskBox 的 Acrylic：模糊壁纸 + 深色罩，**不画描边**——玻璃边缘本身就是边界。
+            // 深色罩基准浓度 75% 黑：低了在浅色壁纸上会变成"灰塑料板"，用户的透明度设置充当"浓度"调节。
+            BackdropImage.Source = backdrop;
+            BackdropImage.Visibility = Visibility.Visible;
+            Root.Background = null;
+            Root.BorderThickness = new Thickness(0);
+
+            var tint = (byte)Math.Round(0xBE * (alpha / 255.0));
+
+            // 罩上加一层极轻的上亮下暗，纯色壁纸上也有"玻璃"的体积感，而不是一块平板
+            var tintBrush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(0, 1),
+            };
+            tintBrush.GradientStops.Add(new GradientStop(Color.FromArgb(tint, 0x1A, 0x1A, 0x1A), 0));
+            tintBrush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)Math.Min(255, tint + 0x08), 0x14, 0x14, 0x14), 1));
+            TintPlate.Background = tintBrush;
+        }
+        else
+        {
+            // 纯色桌面（没有壁纸可糊）：退回实色渐变 + 极淡描边
+            BackdropImage.Visibility = Visibility.Collapsed;
+            TintPlate.Background = BoxBackground(alpha);
+
+            var edge = (byte)Math.Round(Math.Max(alpha * 0.13, 0x24) * (_hover ? 1.8 : 1.0));
+            Root.BorderThickness = new Thickness(1);
+            Root.BorderBrush = new LinearGradientBrush(
+                Color.FromArgb(edge, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb((byte)(edge * 0.4), 0xFF, 0xFF, 0xFF),
+                new Point(0, 0),
+                new Point(0, 1));
+        }
+
+        UpdateBackdropClip();
 
         // 强调条只在"需要提醒"的状态下出现；普通盒子不留任何色条
         if (AccentFor(box) is { } accent)
@@ -216,6 +249,48 @@ public partial class BoxView : UserControl
         return brush;
     }
 
+    /// <summary>盒子当前位置处的壁纸裁剪（亚克力底层）；壁纸不可用返回 null。</summary>
+    private ImageSource? BackdropCrop()
+    {
+        var box = Current;
+        var dipX = Canvas.GetLeft(this);
+        var dipY = Canvas.GetTop(this);
+
+        if (double.IsNaN(dipX))
+        {
+            dipX = box.Bounds.X;
+        }
+
+        if (double.IsNaN(dipY))
+        {
+            dipY = box.Bounds.Y;
+        }
+
+        var scale = _surface.DpiScale;
+
+        return WallpaperBackdrop.Crop(
+            new Int32Rect(
+                (int)Math.Round(dipX * scale),
+                (int)Math.Round(dipY * scale),
+                (int)Math.Round(box.Bounds.Width * scale),
+                (int)Math.Round(BoxGeometry.EffectiveHeight(box) * scale)));
+    }
+
+    /// <summary>模糊底层必须被圆角裁进盒子矩形内，否则角落会露出方形的壁纸边（P2 也不允许）。</summary>
+    private void UpdateBackdropClip()
+    {
+        if (BackdropImage.Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0)
+        {
+            return;
+        }
+
+        var radius = BoxStyle.CornerRadius;
+        BackdropImage.Clip = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight), radius, radius);
+    }
+
+    /// <summary>用户在系统里换了壁纸：重裁底层。</summary>
+    private void OnWallpaperChanged() => ApplyChrome(Current);
+
     private void SetHover(bool hover)
     {
         if (_hover == hover)
@@ -224,6 +299,12 @@ public partial class BoxView : UserControl
         }
 
         _hover = hover;
+
+        // DeskBox 的做法：标题栏按钮平时藏起（桌面干净），悬停盒子才出现。
+        // 隐藏时同时关掉命中——一排看不见的按钮不该挡标题栏的点击与拖动。
+        TitleActions.Opacity = hover ? 1 : 0;
+        TitleActions.IsHitTestVisible = hover;
+
         ApplyChrome(Current);
     }
 
