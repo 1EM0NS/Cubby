@@ -3,38 +3,133 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Cubby · 搜索条目"
         Width="480"
-        Height="460"
-        Style="{StaticResource Cubby.Window}"
-        WindowStartupLocation="CenterScreen">
-    <DockPanel Margin="18">
+        Height="420"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        Foreground="{StaticResource Cubby.Brush.Text}"
+        FontFamily="{StaticResource Cubby.Font.Ui}"
+        MouseLeftButtonDown="OnDragRequested"
+        KeyDown="OnWindowKeyDown">
+    <!--
+        启动器式的搜索面板（借 DeskBox 的搜索结果行 + DesktopFramesPlus 的 SpotSearch 形态）：
+        无边框、无标题栏，顶上一个搜索框，下面结果列表，底部一行状态。
+        窗口背景透明 + 内层圆角 Border，Win10 上也能得到干净的圆角，不依赖 DWM。
+        拖动：按住空白处（搜索框与列表以外的区域）即可。
+    -->
+    <Border x:Name="Shell"
+            CornerRadius="10"
+            Background="{StaticResource Cubby.Brush.Surface}"
+            BorderBrush="{StaticResource Cubby.Brush.BorderStrong}"
+            BorderThickness="1"
+            ClipToBounds="True">
+        <DockPanel Margin="16,14">
 
-        <StackPanel DockPanel.Dock="Top">
-            <TextBlock x:Name="HeaderText" FontSize="15" FontWeight="SemiBold" />
-            <TextBox x:Name="QueryBox"
+            <!-- 搜索行 -->
+            <Border DockPanel.Dock="Top"
+                    CornerRadius="6"
+                    Background="{StaticResource Cubby.Brush.SurfaceAlt}"
+                    BorderBrush="{StaticResource Cubby.Brush.Border}"
+                    BorderThickness="1"
+                    Padding="10,7">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="&#xE721;"
+                               FontFamily="{StaticResource Cubby.Font.Icon}"
+                               FontSize="13"
+                               Foreground="{StaticResource Cubby.Brush.TextDim}"
+                               VerticalAlignment="Center" />
+
+                    <TextBox x:Name="QueryBox"
+                             Grid.Column="1"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             FontSize="14"
+                             TextChanged="OnQueryChanged"
+                             GotKeyboardFocus="OnQueryFocusChanged"
+                             LostKeyboardFocus="OnQueryFocusChanged" />
+
+                    <TextBlock x:Name="Placeholder"
+                               Grid.Column="1"
+                               Text="输入关键词…"
+                               FontSize="14"
+                               Foreground="{StaticResource Cubby.Brush.TextDim}"
+                               IsHitTestVisible="False"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- 底部状态行 -->
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <TextBlock DockPanel.Dock="Right"
+                           Text="Enter 打开 · Esc 关闭"
+                           FontSize="11"
+                           Foreground="{StaticResource Cubby.Brush.TextDim}"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText"
+                           FontSize="11"
+                           Foreground="{StaticResource Cubby.Brush.TextDim}"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+
+            <!-- 结果列表 -->
+            <ListBox x:Name="ResultList"
                      Margin="0,10,0,0"
-                     FontSize="14"
-                     TextChanged="OnQueryChanged"
-                     KeyDown="OnQueryKeyDown" />
-            <TextBlock x:Name="StatusText"
-                       Margin="0,8,0,0"
-                       Style="{StaticResource Cubby.Caption}" />
-        </StackPanel>
-
-        <Border Margin="0,12,0,0" Style="{StaticResource Cubby.Card}" Padding="4">
-            <ListBox x:Name="ResultList" MouseDoubleClick="OnOpenSelected">
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     MouseDoubleClick="OnOpenSelected">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="Padding" Value="4" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel>
-                            <TextBlock Text="{Binding DisplayName}" FontSize="13" />
-                            <TextBlock Text="{Binding TargetPath}"
-                                       FontSize="11"
-                                       Foreground="{StaticResource Cubby.Brush.TextDim}"
-                                       TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
+                        <!--
+                            借 DeskBox 的 SearchResultRowControl：行高紧凑，图标 + 标题 + 暗色路径；
+                            选中态不用大块填色，而是左侧一条 3px 的选中条（层级信息，不是语义强调）。
+                        -->
+                        <Grid Height="42">
+                            <Rectangle Width="3"
+                                       RadiusX="1.5"
+                                       RadiusY="1.5"
+                                       Height="20"
+                                       Fill="{StaticResource Cubby.Brush.Accent}"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False"
+                                       Visibility="{Binding IsSelected,
+                                                    RelativeSource={RelativeSource AncestorType=ListBoxItem},
+                                                    Converter={StaticResource Cubby.BoolToVisibility}}" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,8,0">
+                                <Image Width="30"
+                                       Height="30"
+                                       Margin="0,0,10,0"
+                                       Loaded="OnRowIconLoaded" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="13" />
+                                    <TextBlock Text="{Binding TargetPath}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource Cubby.Brush.TextDim}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxWidth="370" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-        </Border>
 
-    </DockPanel>
+        </DockPanel>
+    </Border>
 </Window>

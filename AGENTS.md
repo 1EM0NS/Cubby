@@ -265,6 +265,15 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 - **验收的采样点要自动避开盒子。** 盒子是用户摆的，写死屏幕比例去挑"盒子外"的点，
   用户把盒子拖过去就必然假红（本机真的撞到过：盒子被拖到 72%/30%）。做法是给一组候选点，
   跳过被命中区域盖住的那个；全被盖住时如实标注"无法采样"，别让人误以为是穿透失败。
+- **搜索/唤起类窗口按"启动器"做，不按"对话框"做**（对照 DeskBox 的 `SearchResultRowControl`
+  与 DesktopFramesPlus 的 SpotSearch）：无边框无标题栏的紧凑面板；结果行 = 图标 + 标题 + 暗色路径，
+  选中态用**左侧一条 3px 的选中条**而不是大块填色；**打开条目后窗口必须自己关掉**——
+  搜索是"找到 → 打开 → 继续干活"，留着一个空窗口只会挡事（用户原话："烂标题栏放在那里"）。
+  键盘逻辑收在窗口层（Enter/Esc/↑/↓），保证焦点在输入框或列表里同一套快捷键都生效。
+- **`BooleanToVisibilityConverter` 不是免声明的内置资源。** 在 XAML 里直接
+  `{StaticResource BooleanToVisibilityConverter}` 会抛 XamlParseException
+  （"在 StaticResourceHolder 上提供值时引发了异常"）——必须先在主题里声明一个
+  （本项目：`Cubby.BoolToVisibility`）。项目里所有图标字体统一走 `Cubby.Font.Icon`，别硬编码字体名。
 
 **改视觉前后各跑一次 `--render-preview`。** 它离屏渲染、不显示任何窗口，
 所以调样式时不会打扰正在用电脑的人；同时做 P2 自检（外扩带必须全透明），退出码 0 = 渲染成功且 P2 通过。
