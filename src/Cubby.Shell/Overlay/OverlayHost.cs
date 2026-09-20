@@ -45,6 +45,9 @@ public sealed class OverlayHost : IDisposable
     /// <summary>置底被触发的次数，供诊断展示。</summary>
     public int EnsureBehindCount { get; private set; }
 
+    /// <summary>从「最小化」状态被拉回来的次数，供诊断展示。</summary>
+    public int RestoreFromMinimizedCount { get; private set; }
+
     /// <summary>窗口区域被设置的次数，供诊断展示。</summary>
     public int RegionApplyCount { get; private set; }
 
@@ -91,6 +94,18 @@ public sealed class OverlayHost : IDisposable
             return;
         }
 
+        // 最小化状态**不会**被 SWP_SHOWWINDOW 撤销——这一条是实测出来的（A6 验收，
+        // 见 artifacts/show-desktop-report.md）：窗口被 shell 收起来之后，我们原以为
+        // "带 SWP_SHOWWINDOW 的 SetWindowPos" 就等价于"让它可见"，实际上它会一直躺在
+        // 最小化状态里，盒子再也不出现。既然方法名叫 EnsureBehind、语义是"保持我们该在的样子"，
+        // 就得真的把可见性负责到底。
+        if (_wantsVisible && NativeMethods.IsIconic(_hwnd))
+        {
+            // 用 SW_SHOWNOACTIVATE：恢复但不抢焦点（浮层永远不该抢焦点，P2/A1）
+            NativeMethods.ShowWindow(_hwnd, NativeMethods.SwShowNoActivate);
+            RestoreFromMinimizedCount++;
+        }
+
         var flags = NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpNoActivate;
         flags |= _wantsVisible ? NativeMethods.SwpShowWindow : NativeMethods.SwpHideWindow;
 
@@ -127,6 +142,19 @@ public sealed class OverlayHost : IDisposable
         _eventHooks.Add(NativeMethods.SetWinEventHook(
             NativeMethods.EventSystemMinimizeStart, NativeMethods.EventSystemMinimizeEnd,
             0, _eventCallback, 0, 0, flags));
+
+        // 再来一组**只看自己进程**的最小化事件。
+        //
+        // 上面那组带着 WineventSkipOwnProcess，它让我们"看不见自己"：一旦我们的浮层被收起来
+        // （外部动作，或者验收里的最小化测试），没有任何事件会触发自动置底，
+        // 「期望可见 ⇒ 可见」这条不变量就只在**别人**触发事件时才成立。
+        // A6 验收实测到了这个缺口（`RestoreFromMinimizedCount` 停在 1 不再增长，窗口一直躺在最小化里）。
+        //
+        // 只钩最小化：我们的窗口成为前台这件事本身不该触发置底（它是 NOACTIVATE 的，本来就不抢焦点），
+        // 钩得越少越不容易出意外。
+        _eventHooks.Add(NativeMethods.SetWinEventHook(
+            NativeMethods.EventSystemMinimizeStart, NativeMethods.EventSystemMinimizeEnd,
+            0, _eventCallback, (uint)Environment.ProcessId, 0, NativeMethods.WineventOutOfContext));
     }
 
     /// <summary>显示/隐藏浮层（托盘菜单「隐藏盒子」用）。隐藏期间窗口不参与命中测试。</summary>

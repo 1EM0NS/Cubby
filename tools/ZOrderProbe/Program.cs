@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Cubby.Core.Model;
 using Cubby.Shell.Diagnostics;
+using Cubby.Shell.Overlay;
 
 namespace ZOrderProbe;
 
@@ -17,6 +18,11 @@ namespace ZOrderProbe;
 ///
 /// 注意：--title 过滤是必要的。同一个进程往往有多个窗口（例如诊断面板也在顶层），
 /// 不过滤就会断言到错误的窗口上，得到一个假 PASS。
+///
+/// **本工具全程只读**，不改变任何窗口状态。曾经有过一个 `--restore-minimized` 模式
+/// （恢复被最小化的窗口），2026-09-20 已删除：它虽然是恢复性质、也要手动调用，
+/// 但"能碰别人窗口的代码"一旦留在仓库里，早晚会被接进自动化里用错地方。
+/// 见 AGENTS.md 的「🚫 验收不得操作用户的窗口」。
 ///
 /// 退出码：0 正常；1 断言失败；2 参数或环境问题。
 /// </summary>
