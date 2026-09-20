@@ -91,20 +91,18 @@ public partial class SnapshotsWindow : Window
         var document = _layout.Snapshots.TryLoad(info.FilePath, out var diagnostic);
         if (document is null)
         {
-            MessageBox.Show(this, $"这份快照读不了：{diagnostic}", "Cubby · 还原快照", MessageBoxButton.OK, MessageBoxImage.Warning);
+            CubbyDialog.Info(this, "Cubby · 还原快照", $"这份快照读不了：{diagnostic}");
             return;
         }
 
         var diff = SnapshotDiff.Describe(document, _manager.Monitors);
-        var answer = MessageBox.Show(
+        var answer = CubbyDialog.Confirm(
             this,
-            $"将把布局还原为 {info.CreatedAt:yyyy-MM-dd HH:mm:ss}（{info.Label}）的版本。{Environment.NewLine}{Environment.NewLine}" +
-            $"{diff}{Environment.NewLine}{Environment.NewLine}还原前会自动为当前布局存一份快照。继续？",
             "Cubby · 还原快照",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            $"将把布局还原为 {info.CreatedAt:yyyy-MM-dd HH:mm:ss}（{info.Label}）的版本。{Environment.NewLine}{Environment.NewLine}" +
+            $"{diff}{Environment.NewLine}{Environment.NewLine}还原前会自动为当前布局存一份快照。继续？");
 
-        if (answer != MessageBoxResult.Yes)
+        if (!answer)
         {
             StatusText.Text = "已取消。";
             return;

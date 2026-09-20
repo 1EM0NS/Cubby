@@ -436,15 +436,13 @@ public partial class BoxView : UserControl
 
         var folder = dialog.SelectedPath;
 
-        var answer = MessageBox.Show(
+        var answer = CubbyDialog.Confirm(
             Window.GetWindow(this),
-            $"将把「{folder}」的内容显示在这个盒子里，并跟随它的增删变化。{Environment.NewLine}{Environment.NewLine}" +
-            "Cubby 不会移动、复制或删除该文件夹里的任何东西，只是换个地方展示。继续？",
             "Cubby · 映射文件夹",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            $"将把「{folder}」的内容显示在这个盒子里，并跟随它的增删变化。{Environment.NewLine}{Environment.NewLine}" +
+            "Cubby 不会移动、复制或删除该文件夹里的任何东西，只是换个地方展示。继续？");
 
-        if (answer != MessageBoxResult.Yes)
+        if (!answer)
         {
             return;
         }
@@ -452,12 +450,10 @@ public partial class BoxView : UserControl
         // 目标不可用时要明确说话，不能让用户以为"这个文件夹本来就是空的"
         if (!MapFolder(folder))
         {
-            MessageBox.Show(
+            CubbyDialog.Info(
                 Window.GetWindow(this),
-                LastMapDiagnostic ?? "映射失败。",
                 "Cubby · 映射文件夹",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                LastMapDiagnostic ?? "映射失败。");
         }
     }
 
@@ -465,7 +461,7 @@ public partial class BoxView : UserControl
     {
         if (Current.MappedFolder is null)
         {
-            MessageBox.Show(Window.GetWindow(this), "这个盒子没有映射文件夹。", "Cubby", MessageBoxButton.OK, MessageBoxImage.Information);
+            CubbyDialog.Info(Window.GetWindow(this), "Cubby", "这个盒子没有映射文件夹。");
             return;
         }
 
@@ -506,13 +502,11 @@ public partial class BoxView : UserControl
         // 一条都没吸到时必须给个说法，否则用户只会觉得"菜单点了没反应"
         if (added == 0)
         {
-            MessageBox.Show(
+            CubbyDialog.Info(
                 Window.GetWindow(this),
-                $"{LastAdoptSummary ?? "读取桌面图标失败"}{Environment.NewLine}{Environment.NewLine}" +
-                "提示：吸附只认「图标位置落在盒子矩形内」的项；「此电脑」「回收站」这类虚拟图标不在桌面目录里，匹配不上属于正常。",
                 "Cubby · 吸附桌面图标",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                $"{LastAdoptSummary ?? "读取桌面图标失败"}{Environment.NewLine}{Environment.NewLine}" +
+                "提示：吸附只认「图标位置落在盒子矩形内」的项；「此电脑」「回收站」这类虚拟图标不在桌面目录里，匹配不上属于正常。");
         }
     }
 

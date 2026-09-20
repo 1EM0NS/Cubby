@@ -79,6 +79,26 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool DestroyIcon(nint icon);
 
+    // ---- 深色标题栏（只作用于**我们自己**窗口的非客户区，不碰任何别人的窗口）----
+
+    /// <summary>Windows 10 2004+ / Windows 11 的属性号。</summary>
+    internal const int DwmwaUseImmersiveDarkMode = 20;
+
+    /// <summary>Windows 10 1809 ~ 1903 用的旧属性号。版本不对时这两个号都会静默失败（返回非 0）。</summary>
+    internal const int DwmwaUseImmersiveDarkModeLegacy = 19;
+
+    /// <summary>设置窗口的 DWM 属性；返回 0 表示成功。</summary>
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    internal static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
+
+    // ---- Windows 11 系统圆角 ----
+
+    /// <summary>窗口圆角偏好（Windows 11）。Win10 会静默忽略。</summary>
+    internal const int DwmwaWindowCornerPreference = 33;
+
+    /// <summary>圆角偏好取值之一：跟随系统默认圆角。</summary>
+    internal const int DwmwcpRound = 2;
+
     internal const int RgnOr = 2;
 
     // ---- 跨进程读取桌面图标（只读，见 DesktopIcons）----

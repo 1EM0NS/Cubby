@@ -319,11 +319,7 @@ internal sealed class OverlayManager : IBoxChangeSink
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
         {
             LastOpenError = $"{item.DisplayName}: {ex.Message}";
-            MessageBox.Show(
-                $"打不开「{item.DisplayName}」：{ex.Message}",
-                "Cubby",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            CubbyDialog.Info(null, "Cubby", $"打不开「{item.DisplayName}」：{ex.Message}");
         }
     }
 

@@ -536,4 +536,35 @@
         </Setter>
     </Style>
 
+    <!-- ================= 提示气泡 =================
+         ToolTip 默认走系统色（浅黄底 + 黑字），在深色界面上是"一块突然亮起来的牌子"。
+         这里给它完整模板，与菜单同一套观感。
+         ⚠️ 同样**不加投影**：条目也有 ToolTip，而它们渲染在盒子浮层里，
+         任何向外扩散的 Effect 都会破坏 P2（盒子外必须 alpha=0）。 -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{StaticResource Cubby.Brush.Surface}" />
+        <Setter Property="Foreground" Value="{StaticResource Cubby.Brush.Text}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Cubby.Brush.BorderStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource Cubby.Font.Ui}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border CornerRadius="5"
+                            Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

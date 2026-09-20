@@ -43,7 +43,13 @@ internal sealed class TrayIcon : IDisposable
         var exit = new ToolStripMenuItem("退出");
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip
+        {
+            // 托盘菜单是 WinForms 的，WPF 主题管不到它；不指定渲染器就是系统白底黑字
+            RenderMode = ToolStripRenderMode.Professional,
+            Renderer = new DarkMenuRenderer(),
+            Font = new Font("Segoe UI", 9f),
+        };
         menu.Items.Add(_boxesItem);
         menu.Items.Add(_desktopIconsItem);
         menu.Items.Add(new ToolStripSeparator());

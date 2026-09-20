@@ -35,9 +35,32 @@ public partial class App : Application
         CrashReporter.Attach(this);
     }
 
+    /// <summary>
+    /// 给**我们自己创建的每一个窗口**套上 Fluent 非客户区（深色标题栏 + 系统圆角）。
+    ///
+    /// 系统标题栏与圆角都不是 WPF 元素，只能在窗口创建后调 DWM 属性去改；而窗口是陆续创建的，
+    /// 所以这里注册一个类处理器：任何 <see cref="Window"/> 一加载就顺手处理。
+    /// 比在每个窗口的构造函数里各写一遍可靠——漏一个就是一个白标题栏。
+    /// （浮层窗口 <c>WindowStyle=None</c>，本来就没有标题栏，不受影响。）
+    /// </summary>
+    private static void ApplyFluentChromeToEveryWindow() =>
+        EventManager.RegisterClassHandler(
+            typeof(Window),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler((sender, _) =>
+            {
+                if (sender is Window window)
+                {
+                    Cubby.Shell.Desktop.FluentChrome.Apply(
+                        new System.Windows.Interop.WindowInteropHelper(window).Handle);
+                }
+            }));
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        ApplyFluentChromeToEveryWindow();
 
         var options = SpikeOptions.Parse(e.Args);
 
@@ -90,6 +113,39 @@ public partial class App : Application
                     result.IconDetail + Environment.NewLine);
 
                 Shutdown(result.NoBleed ? 0 : 1);
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    File.WriteAllText(logPath, "渲染失败：" + Environment.NewLine + ex + Environment.NewLine);
+                }
+                catch (IOException)
+                {
+                    // 连日志都写不进去时不再做别的事
+                }
+
+                Shutdown(1);
+            }
+
+            return;
+        }
+
+        if (options.RenderWindows)
+        {
+            // 窗口内容的设计复核（盒子之外的界面同样会翻车：白标题栏、系统浅色菜单都是这么来的）
+            var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
+            var logPath = Path.Combine(directory, "render-windows-log.txt");
+
+            try
+            {
+                var path = WindowPreviewRenderer.Render(directory);
+
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(logPath, $"窗口预览图：{path}{Environment.NewLine}");
+
+                Shutdown(0);
             }
             catch (Exception ex)
             {
@@ -373,7 +429,10 @@ internal sealed record SpikeOptions(
     /// 离屏渲染一张设计复核图就退出。**刻意不放进 <see cref="IsAutomated"/>**：
     /// 那条路径会先创建并显示浮层窗口，而这里要的正是什么窗口都不出现。
     /// </summary>
-    bool RenderPreview = false)
+    bool RenderPreview = false,
+
+    /// <summary>离屏渲染 Cubby 自己那些窗口的**内容**，用来复核盒子之外的界面。</summary>
+    bool RenderWindows = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
@@ -408,6 +467,7 @@ internal sealed record SpikeOptions(
         SoakSelfTest: Has(args, "--selftest-soak"),
         RestoreOnExit: Has(args, "--restore-on-exit"),
         RenderPreview: Has(args, "--render-preview"),
+        RenderWindows: Has(args, "--render-windows"),
         ShowDesktop: Has(args, "--selftest-show-desktop"));
 
     private static bool Has(string[] args, string name) =>
