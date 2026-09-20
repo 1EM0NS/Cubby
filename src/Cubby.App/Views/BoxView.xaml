@@ -12,36 +12,32 @@
     <Grid>
         <Border x:Name="Root" BorderThickness="1">
             <Grid>
-                <!-- 左侧强调条：颜色随状态变化（正常强调绿 / 锁定黄 / 映射青） -->
+                <!--
+                    左侧强调条：**默认不显示**，只在"需要提醒"的状态下由代码点亮
+                    （锁定 / 映射文件夹）。普通盒子不画任何色条——
+                    桌面上一眼望去全是彩色竖条，是上一版最刺眼的观感问题。
+                -->
                 <Border x:Name="AccentBar"
-                        Width="3"
+                        Width="2.5"
+                        Height="22"
                         HorizontalAlignment="Left"
-                        VerticalAlignment="Stretch"
-                        CornerRadius="2"
-                        Margin="0,10,0,10"
-                        Background="{StaticResource Cubby.Brush.Accent}" />
+                        VerticalAlignment="Top"
+                        CornerRadius="1.25"
+                        Margin="0,7,0,0"
+                        Visibility="Collapsed" />
 
                 <DockPanel>
 
                     <Border x:Name="TitleBar"
                             DockPanel.Dock="Top"
-                            Height="34"
+                            Height="36"
                             Background="Transparent"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="#12FFFFFF"
                             MouseLeftButtonDown="OnTitleMouseDown"
                             MouseMove="OnTitleMouseMove"
                             MouseLeftButtonUp="OnTitleMouseUp">
                         <Grid>
-                            <!-- 顶部高光：一条 1px 的白色渐隐线，营造"玻璃边缘" -->
-                            <Border Height="1" VerticalAlignment="Top" Margin="12,0,12,0" Opacity="0.4">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Offset="0" Color="#00FFFFFF" />
-                                        <GradientStop Offset="0.5" Color="#66FFFFFF" />
-                                        <GradientStop Offset="1" Color="#00FFFFFF" />
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
-
                             <TextBlock x:Name="TitleIcon"
                                        Margin="14,0,0,0"
                                        HorizontalAlignment="Left"
@@ -94,6 +90,22 @@
                     </ScrollViewer>
 
                 </DockPanel>
+
+                <!--
+                    玻璃顶部受光：盒子内侧一条 1px 的白色渐隐线。
+                    这是"玻璃板"而不是"黑板"的关键一笔——它让顶部看起来是被光照到的边。
+                    必须在盒子矩形内（P2），所以只占顶部 1px，绝不向外扩。
+                -->
+                <Border Height="1" VerticalAlignment="Top" IsHitTestVisible="False">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Offset="0" Color="#00FFFFFF" />
+                            <GradientStop Offset="0.3" Color="#4DFFFFFF" />
+                            <GradientStop Offset="0.7" Color="#4DFFFFFF" />
+                            <GradientStop Offset="1" Color="#00FFFFFF" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
             </Grid>
         </Border>
 

@@ -8,7 +8,11 @@ public sealed record StyleSettings
 {
     public double Opacity { get; init; } = 0.85;
 
-    public double CornerRadius { get; init; } = 12;
+    /// <summary>
+    /// 圆角默认取 8：这是 Windows 11 给"顶层容器（窗口 / 浮出层）"的圆角，
+    /// 桌面上的盒子正好属于这一类。控件级的 4 与嵌套的 6/4 由主题内部自己遵守。
+    /// </summary>
+    public double CornerRadius { get; init; } = 8;
 
     public int Columns { get; init; } = 4;
 

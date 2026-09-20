@@ -46,12 +46,10 @@ public partial class BoxView : UserControl
     private const string GlyphLink = "\uE71B";
     private const string GlyphAdd = "\uE710";
 
-    private static readonly Color AccentColor = Color.FromRgb(0x0F, 0xDC, 0x78);
     private static readonly Color WarnColor = Color.FromRgb(0xEF, 0xAA, 0x17);
     private static readonly Color MappedColor = Color.FromRgb(0x27, 0xD2, 0xBF);
 
     // 色值统一从主题资源取（盒子是代码里构建的，取不到时退回上面的常量，绝不因此崩溃）
-    private readonly Color _accent;
     private readonly Color _warn;
     private readonly Color _mapped;
     private readonly Color _iconIdle;
@@ -76,7 +74,6 @@ public partial class BoxView : UserControl
         BoxStyle = style.Normalized();
         _surface = surface;
 
-        _accent = ThemeColor("Cubby.Brush.Accent", AccentColor);
         _warn = ThemeColor("Cubby.Brush.Warn", WarnColor);
         _mapped = ThemeColor("Cubby.Brush.Info", MappedColor);
         _iconIdle = ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0xC8, 0xD2, 0xDC));
@@ -157,39 +154,65 @@ public partial class BoxView : UserControl
     }
 
     /// <summary>
-    /// 盒子的"外壳"：渐变底 + 状态色描边 + 状态色强调条。
-    /// **全部落在盒子矩形内**——盒子外必须保持 alpha=0，否则会抢走桌面与动态壁纸的点击（P2）。
+    /// 盒子的"外壳"：一层中性的半透明底 + 一圈极淡的渐变描边。
+    ///
+    /// 这里刻意**不再用状态色包一整圈边框**（上一版是荧光绿 / 黄 / 青，桌面上一看像"全都被选中了"）。
+    /// 层级交给描边的明度差表达，状态信息交给标题栏的图标——这是 Fluent 的做法：
+    /// 常驻元素保持中性，提醒只在需要时局部出现。
+    ///
+    /// **所有绘制都必须落在盒子矩形内**：盒子外必须保持 alpha=0，否则会抢走桌面与动态壁纸的点击（P2）。
+    /// 因此这里不用任何外扩 Effect（阴影 / 发光都会向外扩散）。立体感只靠渐变与内描边。
     /// </summary>
     private void ApplyChrome(Box box)
     {
         var alpha = (byte)Math.Round(Math.Clamp(BoxStyle.Opacity, 0.2, 1.0) * 255);
-        var edge = box.IsLocked ? _warn : box.MappedFolder is null ? _accent : _mapped;
 
         Root.CornerRadius = new CornerRadius(BoxStyle.CornerRadius);
         Root.Background = BoxBackground(alpha);
-        // 描边也跟着透明度走，但留一点下限，避免调暗后完全看不出盒子边界
-        Root.BorderBrush = new SolidColorBrush(Color.FromArgb(
-            (byte)Math.Round(Math.Max((int)alpha, 90) * (_hover ? 1.0 : 0.62)),
-            edge.R,
-            edge.G,
-            edge.B));
-        AccentBar.Background = new SolidColorBrush(Color.FromArgb(_hover ? (byte)255 : (byte)180, edge.R, edge.G, edge.B));
+
+        // 描边用"上亮下暗"的极淡白，模拟玻璃边缘受光，比一圈等亮度的线自然。
+        // 下限 0x24 是为了把透明度调得很低时仍看得出盒子边界（否则就是一团没有形状的雾）
+        var edge = (byte)Math.Round(Math.Max(alpha * 0.13, 0x24) * (_hover ? 1.8 : 1.0));
+        Root.BorderBrush = new LinearGradientBrush(
+            Color.FromArgb(edge, 0xFF, 0xFF, 0xFF),
+            Color.FromArgb((byte)(edge * 0.4), 0xFF, 0xFF, 0xFF),
+            new Point(0, 0),
+            new Point(0, 1));
+
+        // 强调条只在"需要提醒"的状态下出现；普通盒子不留任何色条
+        if (AccentFor(box) is { } accent)
+        {
+            AccentBar.Visibility = Visibility.Visible;
+            AccentBar.Background = new SolidColorBrush(WithAlpha(accent, _hover ? (byte)0xD9 : (byte)0x99));
+        }
+        else
+        {
+            AccentBar.Visibility = Visibility.Collapsed;
+        }
     }
+
+    /// <summary>需要提醒的状态才有强调色：锁定（黄）/ 映射文件夹（青）；普通盒子返回 null。</summary>
+    private Color? AccentFor(Box box) =>
+        box.IsLocked ? _warn : box.MappedFolder is not null ? _mapped : null;
 
     private Brush BoxBackground(byte alpha)
     {
         // 悬停时整体提亮一档，形成"被指到"的反馈
-        var lift = _hover ? 0x12 : 0x00;
+        var lift = _hover ? 0x0A : 0x00;
 
+        // 中性灰而不是偏蓝黑：Windows 11 深色模式的底是 #202020 这一族。
+        // 上一版用的是 #24 2E 3C / #17 1F 2A 这类带蓝的深色，跟系统界面摆在一起会显"脏"。
         var brush = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0),
             EndPoint = new Point(0, 1),
         };
 
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x24 + lift), (byte)(0x2E + lift), (byte)(0x3C + lift)), 0));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x17 + lift), (byte)(0x1F + lift), (byte)(0x2A + lift)), 0.5));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x11 + lift), (byte)(0x17 + lift), (byte)(0x20 + lift)), 1));
+        // 顶部亮、底部暗：配合盒子顶部那条 1px 高光，读起来才像一块"被光照到的玻璃板"，
+        // 而不是一块均匀的黑板。差值刻意留得明显——太均匀就没有材质感了。
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x36 + lift), (byte)(0x36 + lift), (byte)(0x37 + lift)), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x28 + lift), (byte)(0x28 + lift), (byte)(0x29 + lift)), 0.45));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x1F + lift), (byte)(0x1F + lift), (byte)(0x20 + lift)), 1));
         return brush;
     }
 
@@ -218,14 +241,16 @@ public partial class BoxView : UserControl
 
         if (ItemsHost.ItemsPanel.LoadContent() is WrapPanel panel)
         {
-            panel.ItemWidth = itemWidth;
+            // 空盒子时**不设 ItemWidth**：引导块要独占一整行。
+            // 一旦设了它，WrapPanel 会把子元素强行压成"一个格子"那么宽，文字全被挤成三行。
+            panel.ItemWidth = Current.Items.Count == 0 ? double.NaN : itemWidth;
         }
 
         ItemsHost.Items.Clear();
 
         if (Current.Items.Count == 0)
         {
-            ItemsHost.Items.Add(CreateEmptyState(itemWidth));
+            ItemsHost.Items.Add(CreateEmptyState(available));
             return;
         }
 
@@ -235,8 +260,12 @@ public partial class BoxView : UserControl
         }
     }
 
-    /// <summary>空盒子 / 映射为空的引导：虚线框 + 一句能照着做的话，而不是一行灰字。</summary>
-    private FrameworkElement CreateEmptyState(double itemWidth)
+    /// <summary>
+    /// 空盒子 / 映射为空的引导：一句能照着做的话，**占满整行居中**。
+    /// 早先它被固定成一个格子的宽度，于是"只登记引用，不移动文件"被挤成三行——
+    /// 一句话被折断就不成话了，那是上一版最显"没做完"的地方。
+    /// </summary>
+    private FrameworkElement CreateEmptyState(double availableWidth)
     {
         var mapped = Current.MappedFolder is not null;
 
@@ -247,79 +276,72 @@ public partial class BoxView : UserControl
             Text = GlyphAdd,
             FontFamily = (FontFamily)FindResource("Cubby.Font.Icon"),
             FontSize = 18,
-            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0x97, 0xA4, 0xB1)), 0x99)),
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0xC6, 0xC6, 0xC6)), 0x99)),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
 
         panel.Children.Add(new TextBlock
         {
             Text = mapped ? "这个文件夹现在是空的" : "把文件拖进来",
-            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0x97, 0xA4, 0xB1)), 0xE6)),
+            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0xC6, 0xC6, 0xC6)), 0xE6)),
             FontSize = Math.Max(11, BoxStyle.FontSize - 1),
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 6, 0, 0),
         });
 
-        panel.Children.Add(new TextBlock
+        // 只有映射盒子才再补一行来源。普通空盒子不必解释"拖进来是什么"——
+        // 多写一句，反而把"能照着做的那句话"淹进说明里
+        if (mapped)
         {
-            Text = mapped ? Current.MappedFolder : "只登记引用，不移动文件",
-            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextDim", Color.FromRgb(0x66, 0x73, 0x7F)), 0xCC)),
-            FontSize = Math.Max(10, BoxStyle.FontSize - 3),
-            TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 3, 0, 0),
-        });
+            panel.Children.Add(new TextBlock
+            {
+                Text = Current.MappedFolder,
+                Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.TextDim", Color.FromRgb(0x8C, 0x8C, 0x8C)), 0xCC)),
+                FontSize = Math.Max(10, BoxStyle.FontSize - 3),
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 3, 0, 0),
+            });
+        }
 
         return new Border
         {
-            Width = Math.Max(120, itemWidth),
-            Margin = new Thickness(4, 6, 4, 6),
-            Padding = new Thickness(10, 16, 10, 16),
-            CornerRadius = new CornerRadius(9),
+            Width = Math.Max(160, availableWidth),
+            Margin = new Thickness(2, 4, 2, 4),
+            Padding = new Thickness(12, 20, 12, 20),
+            CornerRadius = new CornerRadius(6),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x3D, 0x97, 0xA4, 0xB1)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
             Child = panel,
         };
     }
 
+    /// <summary>条目图标槽位（DIP）。32 是 Windows 的"大图标"，也是用户在桌面上最熟悉的尺寸。</summary>
+    private const double IconSize = 32;
+
     private FrameworkElement CreateItemVisual(BoxItem item, double itemWidth)
     {
-        var badge = new Border
-        {
-            Style = (Style)FindResource("Cubby.Badge"),
-            Background = new LinearGradientBrush(
-                BadgeColor(item),
-                BadgeColor(item, brighten: true),
-                new Point(0, 0),
-                new Point(0, 1)),
-        };
-        badge.Child = new TextBlock
-        {
-            Text = BadgeText(item),
-            Foreground = new SolidColorBrush(WithAlpha(ThemeColor("Cubby.Brush.Bg", Color.FromRgb(0x10, 0x14, 0x18)), 0xFF)),
-            FontSize = 10.5,
-            FontWeight = FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
         var name = new TextBlock
         {
             Text = item.DisplayName,
-            Foreground = new SolidColorBrush(ThemeColor("Cubby.Brush.Text", Color.FromRgb(0xE8, 0xED, 0xF3))),
+            Foreground = new SolidColorBrush(ThemeColor("Cubby.Brush.Text", Color.FromRgb(0xF0, 0xF0, 0xF0))),
             FontSize = Math.Max(10, BoxStyle.FontSize - 2),
             TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.Wrap,
-            MaxHeight = 34,
+            MaxHeight = 32,
             Margin = new Thickness(2, 6, 2, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
         };
 
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        stack.Children.Add(badge);
+
+        // 图标优先用 shell 给的真实图标。这是"看起来像桌面"的关键一步：
+        // 自绘的字母方块无论做得多精致，都会被一眼认出"这不是系统的图标"。
+        var icon = FileIconCache.For(item);
+        stack.Children.Add(icon is null ? CreateFallbackBadge(item) : CreateIconImage(icon));
         stack.Children.Add(name);
 
         var tile = new Border
@@ -339,6 +361,45 @@ public partial class BoxView : UserControl
 
         return tile;
     }
+
+    private static FrameworkElement CreateIconImage(ImageSource icon)
+    {
+        var image = new Image
+        {
+            Source = icon,
+            Width = IconSize,
+            Height = IconSize,
+            Stretch = Stretch.Uniform,
+            SnapsToDevicePixels = true,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+
+        // 图标是位图，缩放时用高质量插值，否则 125% / 150% 缩放下会有明显锯齿
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        return image;
+    }
+
+    /// <summary>
+    /// 拿不到系统图标时的降级：**中性**的字母方块。
+    /// 刻意不再按类型上色——一排图标四种颜色会让盒子像块调色板，比没有图标还扎眼。
+    /// </summary>
+    private FrameworkElement CreateFallbackBadge(BoxItem item) => new Border
+    {
+        Width = IconSize,
+        Height = IconSize,
+        CornerRadius = new CornerRadius(7),
+        Background = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
+        Child = new TextBlock
+        {
+            Text = BadgeText(item),
+            Foreground = new SolidColorBrush(
+                WithAlpha(ThemeColor("Cubby.Brush.TextMuted", Color.FromRgb(0x9A, 0x9A, 0x9A)), 0xE6)),
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
 
     // ---- 右键菜单 ----
 
@@ -642,28 +703,6 @@ public partial class BoxView : UserControl
     {
         var extension = System.IO.Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
         return string.IsNullOrEmpty(extension) ? "FILE" : extension[..Math.Min(4, extension.Length)];
-    }
-
-    /// <summary>条目图标底色：按类型取色（同样来自主题）；<paramref name="brighten"/> 取渐变的下半段，形成轻微立体感。</summary>
-    private Color BadgeColor(BoxItem item, bool brighten = false)
-    {
-        var baseColor = item.Kind switch
-        {
-            ItemKind.Folder => _accent,
-            ItemKind.Url => ThemeColor("Cubby.Brush.Info", Color.FromRgb(0x80, 0xC1, 0xFF)),
-            ItemKind.Mapped => _mapped,
-            _ => ThemeColor("Cubby.Brush.Text", Color.FromRgb(0xD3, 0xD4, 0xDA)),
-        };
-
-        if (!brighten)
-        {
-            return baseColor;
-        }
-
-        // 往上提亮而不是往下压暗：深色底上"顶部亮、底部暗"更像一块实体
-        static byte Lift(byte value) => (byte)Math.Min(255, value + 0x22);
-
-        return Color.FromRgb(Lift(baseColor.R), Lift(baseColor.G), Lift(baseColor.B));
     }
 
     /// <summary>

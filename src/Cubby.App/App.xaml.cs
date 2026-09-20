@@ -65,6 +65,29 @@ public partial class App : Application
             return;
         }
 
+        if (options.RenderPreview)
+        {
+            // 设计复核：把盒子离屏渲染成一张 PNG。**不创建任何窗口**，屏幕上不会出现东西，
+            // 所以调样式时可以反复跑，不会打扰正在用电脑的人。
+            try
+            {
+                var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
+                var result = PreviewRenderer.Render(directory);
+
+                Console.WriteLine($"设计复核图：{result.Path}");
+                Console.WriteLine($"P2 自检（盒子外必须完全透明）：{(result.NoBleed ? "通过" : "未通过")} —— {result.BleedDetail}");
+
+                Shutdown(result.NoBleed ? 0 : 1);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                Console.Error.WriteLine($"渲染失败：{ex.Message}");
+                Shutdown(1);
+            }
+
+            return;
+        }
+
         if (options.DumpMonitors)
         {
             var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
@@ -323,7 +346,13 @@ internal sealed record SpikeOptions(
     double? SoakIntervalSeconds = null,
     bool SoakSelfTest = false,
     bool RestoreOnExit = false,
-    bool ShowDesktop = false)
+    bool ShowDesktop = false,
+
+    /// <summary>
+    /// 离屏渲染一张设计复核图就退出。**刻意不放进 <see cref="IsAutomated"/>**：
+    /// 那条路径会先创建并显示浮层窗口，而这里要的正是什么窗口都不出现。
+    /// </summary>
+    bool RenderPreview = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
@@ -357,6 +386,7 @@ internal sealed record SpikeOptions(
         SoakIntervalSeconds: NumberOf(args, "--soak-interval"),
         SoakSelfTest: Has(args, "--selftest-soak"),
         RestoreOnExit: Has(args, "--restore-on-exit"),
+        RenderPreview: Has(args, "--render-preview"),
         ShowDesktop: Has(args, "--selftest-show-desktop"));
 
     private static bool Has(string[] args, string name) =>

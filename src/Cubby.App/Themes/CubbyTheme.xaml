@@ -8,22 +8,27 @@
         盒子内部想要的"立体感"一律用渐变与内描边实现，见 BoxView.xaml。
     -->
 
-    <!-- ================= 色板 ================= -->
-    <Color x:Key="Cubby.Color.Bg">#0D1217</Color>
-    <Color x:Key="Cubby.Color.Surface">#151C23</Color>
-    <Color x:Key="Cubby.Color.SurfaceAlt">#1C2530</Color>
-    <Color x:Key="Cubby.Color.SurfaceHover">#243040</Color>
-    <Color x:Key="Cubby.Color.Border">#27323E</Color>
-    <Color x:Key="Cubby.Color.BorderStrong">#3B4A58</Color>
-    <Color x:Key="Cubby.Color.Text">#E8EDF3</Color>
-    <Color x:Key="Cubby.Color.TextMuted">#97A4B1</Color>
-    <Color x:Key="Cubby.Color.TextDim">#66737F</Color>
-    <Color x:Key="Cubby.Color.Accent">#0FDC78</Color>
-    <Color x:Key="Cubby.Color.AccentDim">#0BA95C</Color>
-    <Color x:Key="Cubby.Color.AccentDeep">#123D2A</Color>
-    <Color x:Key="Cubby.Color.Warn">#EFAA17</Color>
-    <Color x:Key="Cubby.Color.Info">#7CC0FF</Color>
-    <Color x:Key="Cubby.Color.Track">#2A3542</Color>
+    <!-- ================= 色板 =================
+         对齐 Windows 11 深色模式的取值：
+         · 背景用**中性灰** #202020 一族，而不是带蓝的深色——带蓝的底跟系统界面摆在一起会显"脏"；
+         · 强调色用系统的浅蓝 #4CC2FF，而不是高饱和的荧光绿。桌面是用户的，
+           工具不该在别人的墙上刷自己的漆；需要提醒时才局部用色（见 BoxView 的强调条）。
+    -->
+    <Color x:Key="Cubby.Color.Bg">#202020</Color>
+    <Color x:Key="Cubby.Color.Surface">#2B2B2B</Color>
+    <Color x:Key="Cubby.Color.SurfaceAlt">#323232</Color>
+    <Color x:Key="Cubby.Color.SurfaceHover">#3B3B3B</Color>
+    <Color x:Key="Cubby.Color.Border">#3D3D3D</Color>
+    <Color x:Key="Cubby.Color.BorderStrong">#4D4D4D</Color>
+    <Color x:Key="Cubby.Color.Text">#F2F2F2</Color>
+    <Color x:Key="Cubby.Color.TextMuted">#C6C6C6</Color>
+    <Color x:Key="Cubby.Color.TextDim">#8C8C8C</Color>
+    <Color x:Key="Cubby.Color.Accent">#4CC2FF</Color>
+    <Color x:Key="Cubby.Color.AccentDim">#3A9BD5</Color>
+    <Color x:Key="Cubby.Color.AccentDeep">#1B3D52</Color>
+    <Color x:Key="Cubby.Color.Warn">#FFC83D</Color>
+    <Color x:Key="Cubby.Color.Info">#5FD3A6</Color>
+    <Color x:Key="Cubby.Color.Track">#4D4D4D</Color>
 
     <SolidColorBrush x:Key="Cubby.Brush.Bg" Color="{StaticResource Cubby.Color.Bg}" />
     <SolidColorBrush x:Key="Cubby.Brush.Surface" Color="{StaticResource Cubby.Color.Surface}" />
@@ -46,7 +51,9 @@
     <SolidColorBrush x:Key="Cubby.Brush.Caution" Color="{StaticResource Cubby.Color.Warn}" />
 
     <!-- ================= 字体 ================= -->
-    <FontFamily x:Key="Cubby.Font.Ui">Microsoft YaHei UI, Segoe UI, Segoe UI Emoji</FontFamily>
+    <!-- 优先 Segoe UI Variable（Windows 11 的系统字体），Win10 回退 Segoe UI；
+         中文字形这两者都没有，会逐字回退到微软雅黑——和 Windows 自己的做法一致 -->
+    <FontFamily x:Key="Cubby.Font.Ui">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Segoe UI Emoji</FontFamily>
     <FontFamily x:Key="Cubby.Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
     <!-- 图标字体：全部界面图标统一用它的矢量字形，比彩色 emoji 干净，且跟随前景色 -->
     <FontFamily x:Key="Cubby.Font.Icon">Segoe MDL2 Assets</FontFamily>
@@ -195,28 +202,21 @@
         </Setter>
     </Style>
 
-    <!-- 盒子里的条目磁贴：透明底 + 悬停高亮，全部在盒子内部（P2） -->
+    <!-- 盒子里的条目磁贴：透明底 + 极淡的悬停高亮，全部在盒子内部（P2） -->
     <Style x:Key="Cubby.ItemTile" TargetType="Border">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="9" />
-        <Setter Property="Padding" Value="4,7" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="4,8" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#26FFFFFF" />
-                <Setter Property="BorderBrush" Value="#40FFFFFF" />
+                <!-- 悬停只加一层很淡的白，不再同时描边——
+                     桌面图标本身的悬停反馈就是这么轻，多画一圈会让整块磁贴显得"被框住" -->
+                <Setter Property="Background" Value="#1FFFFFFF" />
             </Trigger>
         </Style.Triggers>
-    </Style>
-
-    <!-- 条目图标底座 -->
-    <Style x:Key="Cubby.Badge" TargetType="Border">
-        <Setter Property="Width" Value="36" />
-        <Setter Property="Height" Value="36" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
     <!-- ================= 输入 ================= -->
