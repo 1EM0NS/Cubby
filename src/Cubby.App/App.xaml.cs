@@ -152,6 +152,7 @@ public partial class App : Application
                     { CrashLog: true } => await CrashLogTestRunner.RunAsync(manager, layout, options),
                     { SoakSelfTest: true } => await SoakRunner.RunAsync(manager, layout, options),
                     { Soak: true } => await SoakRunner.RunAsync(manager, layout, options),
+                    { ShowDesktop: true } => await ShowDesktopTestRunner.RunAsync(manager, layout, options),
                     _ => 0,
                 };
 
@@ -321,11 +322,12 @@ internal sealed record SpikeOptions(
     double? SoakMinutes = null,
     double? SoakIntervalSeconds = null,
     bool SoakSelfTest = false,
-    bool RestoreOnExit = false)
+    bool RestoreOnExit = false,
+    bool ShowDesktop = false)
 {
     /// <summary>是否是自动化验收（需要浮层窗口先渲染出首帧）。</summary>
     public bool IsAutomated =>
-        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard || CrashLog || Soak || SoakSelfTest;
+        SelfTest || Interact || Drop || Menu || Shell || Adopt || Snapshot || Map || Search || Rules || DesktopIcons || Appearance || Coexist || Onboard || CrashLog || Soak || SoakSelfTest || ShowDesktop;
 
     public static SpikeOptions Parse(string[] args) => new(
         SelfTest: Has(args, "--selftest"),
@@ -354,7 +356,8 @@ internal sealed record SpikeOptions(
         SoakMinutes: NumberOf(args, "--soak"),
         SoakIntervalSeconds: NumberOf(args, "--soak-interval"),
         SoakSelfTest: Has(args, "--selftest-soak"),
-        RestoreOnExit: Has(args, "--restore-on-exit"));
+        RestoreOnExit: Has(args, "--restore-on-exit"),
+        ShowDesktop: Has(args, "--selftest-show-desktop"));
 
     private static bool Has(string[] args, string name) =>
         args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));

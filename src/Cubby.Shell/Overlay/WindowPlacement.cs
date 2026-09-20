@@ -65,9 +65,40 @@ public static class WindowPlacement
     /// </summary>
     public const long NoActivateFlag = 0x08000000L;
 
+    /// <summary>
+    /// <c>WS_EX_TOOLWINDOW</c> 的位值。浮层带这一位，所以它不进任务栏、不进 Alt+Tab——
+    /// 也正因如此，shell 的「显示桌面 / Win+D」不会把它当成一个"应用窗口"收走。
+    /// 验收用它来给出「系统级动作为什么收不走浮层」的客观依据，而不是靠嘴说。
+    /// </summary>
+    public const long ToolWindowFlag = 0x00000080L;
+
     /// <summary>读某个扩展样式位是否置上。只读查询，不修改任何东西。</summary>
     public static bool HasExtendedStyle(nint hwnd, long style) =>
         hwnd != 0 && ((long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle) & style) == style;
+
+    /// <summary>窗口是否处于最小化状态。</summary>
+    public static bool IsMinimized(nint hwnd) => hwnd != 0 && NativeMethods.IsIconic(hwnd);
+
+    /// <summary>
+    /// 把窗口最小化。**只给自动化验收用**：用来复现「被显示桌面收起来」的状态，
+    /// 产品路径不该调用它——用户没有任何入口能把浮层最小化。
+    /// </summary>
+    public static void Minimize(nint hwnd)
+    {
+        if (hwnd != 0)
+        {
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SwMinimize);
+        }
+    }
+
+    /// <summary>把最小化的窗口恢复出来。恢复会激活窗口，验收里只在最后兜底用。</summary>
+    public static void Restore(nint hwnd)
+    {
+        if (hwnd != 0)
+        {
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SwRestore);
+        }
+    }
 
     /// <summary>让窗口不抢焦点、不出现在任务栏与 Alt+Tab 里。</summary>
     public static void MakeNonActivating(nint hwnd) =>

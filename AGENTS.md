@@ -97,6 +97,27 @@ gh issue list --repo 1EM0NS/Cubby --limit 30
 
 `--selftest` 不受影响：它自造一个受控背景层并置顶，刻意绕开用户桌面状态。
 
+### 🚫 硬边界：验收**不得操作用户的窗口**（这条比任何测试都重要）
+
+**这条来自一次真实的翻车**：2026-09-20 为了自动化 A6，验收里写了「把桌面上所有带标题的窗口
+最小化，再恢复」，用来复刻「显示桌面」。结果是**真的把用户的窗口全部收起来又放开，
+用户的桌面被搅乱了**。用户明确要求不许再这么干。
+
+所以：
+
+- **验收只允许动 Cubby 自己的窗口**（浮层、引导窗、自检背景层）。不许去最小化/移动/激活别人的窗口，
+  不许切换系统级的「显示桌面」，不许注入全局按键组合。
+- **不许用 `SendInput` 注入 Win 组合键**：实测在本机不生效（SendInput 报成功但 shell 无响应），
+  而且这类注入会去动别人的窗口——两头都不划算。
+- **需要动整台机器的场景，就留成人工项**。人工项可以补，用户的桌面不能白被搅一次。
+  真·Win+D / Win+M 的端到端就是这个待遇：留在回归清单的人工项里。
+- 需要稳定可复现的命中测试时，用 `--selftest` 那一招：**把自己**的浮层临时置顶
+  （`host.SuspendAutoBehind()` + `WindowPlacement.SetTopmost` + 测完 `ResumeAutoBehind()` + `EnsureBehind()`），
+  而不是去改变别人窗口的状态。
+- 仓库里**不留"能碰别人窗口"的代码**。曾经有过一个 `ZOrderProbe --restore-minimized`
+  （恢复被最小化的窗口，手动调用），已删除：这种口子留着，早晚会被接进自动化里用错地方。
+  `tools/ZOrderProbe` 现在是纯只读工具。
+
 ### 出问题了先看日志
 
 - 崩溃与未处理异常写在 `%AppData%\Cubby\logs\cubby-yyyyMMdd.log`：按天分文件，
@@ -164,6 +185,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --selftest-onboard      # 首次运行引导：出现 / 跳过 / 重置三条路径 + 托盘「使用指引」（写 onboard-report.md）
 & $app --selftest-crashlog     # 崩溃日志：注入假异常落盘 + 文件头 + 轮转/保留 + 提示窗可操作（写 crashlog-report.md）
 & $app --selftest-soak         # 稳定性采样门禁（A7）短程自检：判定器 + 采样链路（写 soak-report.md）
+& $app --selftest-show-desktop # 浮层被 shell 收走后的自恢复 + 工具窗口样式依据（写 show-desktop-report.md）
 & $app --soak 480              # 真挂机 480 分钟（A7 的完整结论只能由它给出）；--soak-interval <秒> 改采样间隔
 & $app --reset-onboarding      # 重置引导标记，下次启动重新出现欢迎窗（换机、演示前重放用）
 & $app --dump-monitors         # 显示器枚举与分配计划（写 monitors.txt）

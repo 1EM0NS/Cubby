@@ -139,6 +139,10 @@ internal static class NativeMethods
     internal const uint MouseeventfVirtualDesk = 0x4000;
     internal const uint MouseeventfAbsolute = 0x8000;
 
+    // ShowWindow 的常用命令
+    internal const int SwMinimize = 6;
+    internal const int SwRestore = 9;
+
     // GetSystemMetrics 的索引
     internal const int SmCxScreen = 0;
     internal const int SmCyScreen = 1;
@@ -149,6 +153,13 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsIconic(nint hwnd);
+
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
 
     internal delegate void WinEventProc(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time);
 

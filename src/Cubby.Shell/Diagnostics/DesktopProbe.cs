@@ -76,6 +76,37 @@ public static class DesktopProbe
         return false;
     }
 
+    /// <summary>窗口是否处于最小化状态。全部只读查询。</summary>
+    public static bool IsMinimized(nint hwnd) => hwnd != 0 && NativeMethods.IsIconic(hwnd);
+
+    /// <summary>当前前台窗口句柄。</summary>
+    public static nint ForegroundWindow() => NativeMethods.GetForegroundWindow();
+
+    /// <summary>
+    /// 「最小化且有标题」的顶层窗口数量（≈ 任务栏上会被收起来的那些）。
+    ///
+    /// 专门为验收准备：断言浮层没消失之前，得先证明**激励真的发生了**。
+    /// 否则一条「按了 Win+D 但什么都没变」的路径也会让断言绿——那和没测一样。
+    /// </summary>
+    public static int CountMinimizedTaskWindows()
+    {
+        var count = 0;
+
+        NativeMethods.EnumWindows(
+            (hwnd, _) =>
+            {
+                if (NativeMethods.IsIconic(hwnd) && !string.IsNullOrEmpty(NativeMethods.TitleOf(hwnd)))
+                {
+                    count++;
+                }
+
+                return true;
+            },
+            0);
+
+        return count;
+    }
+
     /// <summary>顶层窗口的 Z 序快照，**最顶层在前**。</summary>
     public static IReadOnlyList<WindowInfo> ZOrderSnapshot(int max = 60)
     {
