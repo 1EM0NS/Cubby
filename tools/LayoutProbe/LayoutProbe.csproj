@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>LayoutProbe</RootNamespace>
+    <AssemblyName>LayoutProbe</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 只用 Shell 的显示器枚举（只读查询）与 Core 的分配/修正逻辑，不引用 App（不拉起任何界面） -->
+    <ProjectReference Include="..\..\src\Cubby.Shell\Cubby.Shell.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -62,12 +62,17 @@ internal static class MonitorReport
             builder.AppendLine($"  {plan.Monitor.Id}（{plan.Boxes.Count} 个盒子{(plan.HasFallback ? "，含回退" : string.Empty)}）");
             foreach (var planned in plan.Boxes)
             {
-                builder.AppendLine($"      {planned.Box.Name,-18} 匹配方式 = {planned.Kind}");
+                var bounds = planned.Box.Bounds;
+                builder.AppendLine(
+                    $"      {planned.Box.Name,-18} 匹配方式 = {planned.Kind,-15} 修正 = {planned.Fix,-16} " +
+                    $"位置 = ({bounds.X:0},{bounds.Y:0}) {bounds.Width:0}×{bounds.Height:0} DIP");
             }
         }
 
         builder.AppendLine();
         builder.AppendLine("说明：'回退' 表示该盒子原来绑定的显示器当前不存在，盒子被安排到主屏而不是被丢弃。");
+        builder.AppendLine("      '修正' 表示盒子在该屏的 DIP 空间里放不下（屏变小了 / DPI 变高了），");
+        builder.AppendLine("      已被挪进可见范围——不修正的话它会落在浮层窗口之外，用户连拖都拖不到。");
 
         return builder.ToString();
     }

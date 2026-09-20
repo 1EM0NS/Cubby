@@ -200,4 +200,42 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 
 # 鼠标钩子链基线对比（A1/A3）：先在 Cubby 未运行时采集基线
 .\tools\HookProbe\bin\Release\net8.0-windows\HookProbe.exe --out artifacts\hookprobe-baseline.json
+
+# 显示器拓扑推演（A5 的逻辑部分，写 artifacts\layout-probe-report.md）
+.\tools\LayoutProbe\bin\Release\net8.0-windows\LayoutProbe.exe
+.\tools\LayoutProbe\bin\Release\net8.0-windows\LayoutProbe.exe --monitors   # 只看当前显示器与各自的 DIP 空间
+.\tools\LayoutProbe\bin\Release\net8.0-windows\LayoutProbe.exe --json       # 前后对比用
 ```
+
+### 盒子可见性：`BoxPlacement` 守的是什么
+
+盒子的 `Bounds` 是**相对所属显示器左上角的 DIP**（见 `Box.Bounds` 的注释），原点跟着屏走。
+这个设计让"换显示器不用重算坐标"，但它只在**同样大**的屏上成立。三种情况会让坐标越界：
+
+1. 副屏被拔掉 → 原属它的盒子回退到主屏，坐标却是按副屏尺寸放的；
+2. 分辨率调小 → 靠右下的盒子被留在屏外；
+3. DPI 调高 → 同一块屏的 DIP 可用范围变小（2560×1440@125% 是 2048×1152，@150% 就只剩 1707×960）。
+
+**越界的后果是盒子丢了**：浮层窗口只覆盖一块屏，盒子整块落在窗口外时既画不出来也点不到，
+用户连拖都拖不回来。所以 `BoxPlacement.FitInto` 的判据是「**整盒可见**」，而不是"露一个角"。
+
+两条不能破的约束：
+
+- **没越界就一个字节都不改。** 绝大多数重建发生在显示器没变的情况下，那里若也"顺手规范化"，
+  每次启动都会悄悄弄脏用户的布局文件。单测 `显示器没变时分配计划不会顺手弄脏布局` 钉着这条。
+- **`Fallback` 时只挪坐标、不改归属。** 枚举不到某块屏既可能是真拔了，也可能只是它睡着了；
+  若立刻把归属改成主屏，屏一回来盒子就永远留在主屏了——那正是 #5「副屏唤醒后不跑到主屏」要防的。
+  归属真正改掉的时机是**用户自己拖它**（`OverlayManager.OnBoxChanged` → `PinToActualMonitor`），
+  那是唯一能确定"它就该在这块屏上"的信号。
+
+### `LayoutProbe` 只做逻辑，端到端仍是人工项
+
+`tools/LayoutProbe` 把"盒子归哪块屏、在那块屏上放不放得下"这个**纯函数**拿出来，
+喂给它构造出来的拓扑矩阵（单屏 / 只剩主屏 / 分辨率调小 / DPI 升高 / 设备名变化 / 扩展出副屏 / 主副屏交换），
+断言每个盒子都落在存在的屏上且整盒可见。**它不改系统显示设置、不增删显示器、不动任何窗口、不写布局文件。**
+
+所以「真的拔插显示器 / 改分辨率 / 换主屏」的端到端验证**依然留人工**：
+`LayoutProbe` 保证的是逻辑对不对，人工确认的是接到系统上是不是真走通了。两者不是替代关系。
+
+**别为了让工具"测得真一点"去调 `ChangeDisplaySettings`** —— 那会在用户眼前闪黑屏，
+还可能把用户的桌面分辨率改坏。逻辑与端到端的分工就按上面这样切开。

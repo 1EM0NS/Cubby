@@ -30,6 +30,7 @@ public static class SnapshotDiff
         var boxes = plans.SelectMany(p => p.Boxes).ToList();
         var fallback = boxes.Count(b => b.Kind == MonitorMatchKind.Fallback);
         var sameResolution = boxes.Count(b => b.Kind == MonitorMatchKind.SameResolution);
+        var adjusted = boxes.Count(b => b.Fix != PlacementFix.None);
 
         if (boxes.Count == 0)
         {
@@ -45,6 +46,13 @@ public static class SnapshotDiff
         if (fallback > 0)
         {
             lines.Add("回退的盒子不会丢，但位置可能不在原来的屏上；还原后可以直接拖动调整。");
+        }
+
+        // 屏幕比快照时小（或 DPI 更高导致 DIP 空间更小）时，贴边的盒子会被拉回屏内。
+        // 这不是错误，但属于"还原后的样子和快照不一样"，必须提前说清楚
+        if (adjusted > 0)
+        {
+            lines.Add($"其中 {adjusted} 个盒子在当前屏幕上放不下，还原时会被挪进可见范围（尺寸或位置有调整）。");
         }
 
         return string.Join(Environment.NewLine, lines);
