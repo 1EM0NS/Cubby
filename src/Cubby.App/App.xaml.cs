@@ -69,19 +69,40 @@ public partial class App : Application
         {
             // 设计复核：把盒子离屏渲染成一张 PNG。**不创建任何窗口**，屏幕上不会出现东西，
             // 所以调样式时可以反复跑，不会打扰正在用电脑的人。
+            //
+            // 诊断一律落文件：本程序是 WinExe，没有控制台，Console 写出去谁也看不见
+            // ——刚才就是这么吃了个闷亏：渲染失败退出码是 1，但失败原因完全看不到。
+            var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
+            var logPath = Path.Combine(directory, "render-preview-log.txt");
+
             try
             {
-                var directory = options.OutputDirectory ?? Path.Combine(AppContext.BaseDirectory, "artifacts");
                 var result = PreviewRenderer.Render(directory);
 
-                Console.WriteLine($"设计复核图：{result.Path}");
-                Console.WriteLine($"P2 自检（盒子外必须完全透明）：{(result.NoBleed ? "通过" : "未通过")} —— {result.BleedDetail}");
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(
+                    logPath,
+                    $"预览图：{result.Path}{Environment.NewLine}" +
+                    $"P2 自检（盒子外必须完全透明）：{(result.NoBleed ? "通过" : "未通过")}{Environment.NewLine}" +
+                    result.BleedDetail + Environment.NewLine +
+                    Environment.NewLine +
+                    "样例图标（位图尺寸@DPI）：" + Environment.NewLine +
+                    result.IconDetail + Environment.NewLine);
 
                 Shutdown(result.NoBleed ? 0 : 1);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            catch (Exception ex)
             {
-                Console.Error.WriteLine($"渲染失败：{ex.Message}");
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    File.WriteAllText(logPath, "渲染失败：" + Environment.NewLine + ex + Environment.NewLine);
+                }
+                catch (IOException)
+                {
+                    // 连日志都写不进去时不再做别的事
+                }
+
                 Shutdown(1);
             }
 

@@ -428,23 +428,112 @@
         </Setter>
     </Style>
 
-    <!-- ================= 菜单 ================= -->
+    <!-- ================= 菜单 =================
+         照 Windows 11 的 Flyout 写：深色面 + 8px 圆角 + 32px 行高 + 4px 行圆角 + 淡阴影。
+
+         ⚠️ 这里**必须给完整 ControlTemplate**。WPF 默认的 ContextMenu / MenuItem 模板自带一套
+         浅色 chrome，只设 Background / Foreground 是盖不住的——踩过一次：深色盒子里弹出一个
+         纯白菜单，文字还是黑的，非常刺眼。凡是要改外观的系统控件都同理。
+    -->
     <Style TargetType="ContextMenu">
         <Setter Property="Background" Value="{StaticResource Cubby.Brush.Surface}" />
         <Setter Property="Foreground" Value="{StaticResource Cubby.Brush.Text}" />
-        <Setter Property="BorderBrush" Value="{StaticResource Cubby.Brush.BorderStrong}" />
+        <Setter Property="BorderBrush" Value="#1FFFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
         <Setter Property="FontFamily" Value="{StaticResource Cubby.Font.Ui}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Grid>
+                        <!-- 外观只包这一层；Margin 留给阴影（菜单是独立 Popup，不受 P2 约束） -->
+                        <Border x:Name="MenuRoot"
+                                Margin="10"
+                                Padding="4"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="16"
+                                                  ShadowDepth="3"
+                                                  Direction="270"
+                                                  Opacity="0.45"
+                                                  Color="#000000" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+
+                        <!-- ⚠️ 这个 Popup 不能删：WPF 的 ContextMenu 正是靠模板里的 PART_Popup 才能打开，
+                             它同时也是子菜单的宿主。本程序的菜单没有二级菜单，但少了它菜单就弹不出来。 -->
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               Placement="Bottom"
+                               IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Border Padding="4"
+                                    CornerRadius="8"
+                                    Background="{StaticResource Cubby.Brush.Surface}"
+                                    BorderBrush="#1FFFFFFF"
+                                    BorderThickness="1"
+                                    SnapsToDevicePixels="True">
+                                <StackPanel IsItemsHost="True"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="MenuItem">
         <Setter Property="Foreground" Value="{StaticResource Cubby.Brush.Text}" />
         <Setter Property="FontFamily" Value="{StaticResource Cubby.Font.Ui}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Chrome"
+                            CornerRadius="4"
+                            Padding="12,0"
+                            Background="Transparent"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Header"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- 悬停用很淡的白，和清单项的悬停是同一套语言 -->
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#16FFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="Separator">
-        <Setter Property="Background" Value="{StaticResource Cubby.Brush.Border}" />
+        <Setter Property="Background" Value="#14FFFFFF" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1"
+                            Margin="8,4"
+                            Background="{TemplateBinding Background}"
+                            SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
