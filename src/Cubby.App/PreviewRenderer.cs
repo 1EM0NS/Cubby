@@ -24,7 +24,8 @@ namespace Cubby.App;
 /// <param name="Path">预览图路径。</param>
 /// <param name="NoBleed">盒子之外是否完全没有绘制（P2）。</param>
 /// <param name="BleedDetail">P2 自检的明细，逐盒子列出。</param>
-internal sealed record PreviewResult(string Path, bool NoBleed, string BleedDetail);
+/// <param name="IconDetail">每个样例图标拿到的位图尺寸与 DPI。图标被拉变形过一次，写出来省得靠肉眼猜。</param>
+internal sealed record PreviewResult(string Path, bool NoBleed, string BleedDetail, string IconDetail);
 
 internal static class PreviewRenderer
 {
@@ -38,8 +39,15 @@ internal static class PreviewRenderer
         var boxes = SampleBoxes();
         var heights = boxes.Select(BoxGeometry.EffectiveHeight).ToList();
 
-        var width = boxes.Max(b => b.Bounds.Width) + (Gap * 2);
-        var height = heights.Sum() + (Gap * (boxes.Count + 1));
+        // 菜单要先量出来，才能算画布高度。
+        // ContextMenu 默认是 Collapsed，不显式打开就量不出尺寸（DesiredSize 会是 0）
+        var menu = BuildSampleMenu();
+        menu.Visibility = Visibility.Visible;
+        menu.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var menuSize = menu.DesiredSize;
+
+        var width = Math.Max(boxes.Max(b => b.Bounds.Width), menuSize.Width) + (Gap * 2);
+        var height = heights.Sum() + menuSize.Height + (Gap * (boxes.Count + 2));
 
         var canvas = new Canvas { Width = width, Height = height };
 
@@ -66,6 +74,26 @@ internal static class PreviewRenderer
 
             top += heights[i] + Gap;
         }
+
+        // 菜单样例单独画一块，不叠在盒子上（叠上去整张图就看不清了）。
+        // 它是**最容易翻车的控件**：不在浮层窗口里，样式一旦没盖住就会弹出系统默认的浅色菜单。
+        //
+        // ⚠️ 它不能直接挂进视觉树：WPF 明确禁止 ContextMenu 有逻辑/视觉父级
+        //    （抛「ContextMenu 不能有逻辑或视觉父级」）。所以先单独渲染成位图，再把位图贴上来。
+        menu.Arrange(new Rect(0, 0, menuSize.Width, menuSize.Height));
+        menu.UpdateLayout();
+
+        var menuImage = new Image
+        {
+            Source = RenderToBitmap(menu, (int)Math.Ceiling(menuSize.Width), (int)Math.Ceiling(menuSize.Height)),
+            Width = menuSize.Width,
+            Height = menuSize.Height,
+            Stretch = Stretch.None,
+        };
+
+        Canvas.SetLeft(menuImage, Gap);
+        Canvas.SetTop(menuImage, top);
+        canvas.Children.Add(menuImage);
 
         canvas.Measure(new Size(width, height));
         canvas.Arrange(new Rect(0, 0, width, height));
@@ -102,7 +130,29 @@ internal static class PreviewRenderer
             details.Add($"{box.Name} — {detail}");
         }
 
-        return new PreviewResult(path, noBleed, string.Join("；", details));
+        return new PreviewResult(path, noBleed, string.Join("；", details), DescribeIcons(boxes));
+    }
+
+    /// <summary>
+    /// 逐个报告样例图标拿到的位图尺寸与 DPI。
+    /// 存在的理由：图标"看起来被压扁"时，靠肉眼分不清是**取到的位图不是正方形**，
+    /// 还是**那个图标本来就长这样**。把尺寸写出来，一眼就能分辨。
+    /// </summary>
+    private static string DescribeIcons(IReadOnlyList<Box> boxes) => string.Join(
+        "；",
+        boxes
+            .SelectMany(box => box.Items)
+            .Select(item => FileIconCache.For(item) is BitmapSource bitmap
+                ? $"{item.DisplayName} {bitmap.PixelWidth}×{bitmap.PixelHeight}@{bitmap.DpiX:0}"
+                : $"{item.DisplayName} 取不到图标"));
+
+    /// <summary>把一个元素单独渲染成位图——用于那些不能挂进视觉树的控件（例如 ContextMenu）。</summary>
+    private static BitmapSource RenderToBitmap(FrameworkElement element, int width, int height)
+    {
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        bitmap.Freeze();
+        return bitmap;
     }
 
     /// <summary>
@@ -154,6 +204,24 @@ internal static class PreviewRenderer
         return offenders == 0
             ? (true, "外扩带完全透明")
             : (false, $"外扩带有 {offenders} 个非透明像素");
+    }
+
+    /// <summary>
+    /// 右键菜单的样例。刻意放进预览图：**菜单是最容易翻车的控件**——
+    /// 它不在浮层窗口里，样式一旦没盖住，就会在深色盒子上弹出一个系统默认的浅色菜单。
+    /// 上一版正是如此（白底黑字的菜单压在深色盒子上，非常刺眼）。
+    /// </summary>
+    private static ContextMenu BuildSampleMenu()
+    {
+        var menu = new ContextMenu();
+
+        menu.Items.Add(new MenuItem { Header = "打开" });
+        menu.Items.Add(new MenuItem { Header = "打开位置" });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem { Header = "重命名" });
+        menu.Items.Add(new MenuItem { Header = "移出盒子" });
+
+        return menu;
     }
 
     /// <summary>

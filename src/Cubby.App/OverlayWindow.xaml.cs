@@ -193,25 +193,45 @@ public partial class OverlayWindow : Window
                 Note: "该点应被浮层拦截，并注入一次左键验证"));
         }
 
-        void AddOutside(string label, double fractionX, double fractionY)
+        // 盒子外的采样点：从一组候选位置里挑**真的没被盒子盖住**的那个。
+        //
+        // 不能像以前那样写死一个屏幕比例——盒子是用户摆的，他想放哪就放哪。
+        // 写死的点一旦落在盒子上，这条"盒子外必须穿透"的断言就会假红：
+        // 本机真的撞到过（用户把盒子拖到了屏幕 72% / 30% 处，正好压住那个采样点）。
+        void AddOutside(string label, params (double X, double Y)[] candidates)
         {
-            var x = surface.Bounds.Left + (int)(surface.Bounds.Width * fractionX);
-            var y = surface.Bounds.Top + (int)(surface.Bounds.Height * fractionY);
-            var accidentallyInside = HitRegion.HitTest(Regions, x, y);
+            foreach (var (fractionX, fractionY) in candidates)
+            {
+                var x = surface.Bounds.Left + (int)(surface.Bounds.Width * fractionX);
+                var y = surface.Bounds.Top + (int)(surface.Bounds.Height * fractionY);
 
+                if (HitRegion.HitTest(Regions, x, y))
+                {
+                    continue;   // 这个候选点被盒子压住了，换下一个
+                }
+
+                points.Add(new SamplePoint(
+                    label,
+                    x,
+                    y,
+                    ExpectOurs: false,
+                    Note: "透明区域的点：点击必须穿透到受控背景层，背景层收到点击即为穿透成功的直接证据"));
+
+                return;
+            }
+
+            // 所有候选都被盖住：如实标出来，别让读报告的人以为是"穿透失败"
             points.Add(new SamplePoint(
                 label,
-                x,
-                y,
+                surface.Bounds.Left,
+                surface.Bounds.Top,
                 ExpectOurs: false,
-                Note: accidentallyInside
-                    ? "采样点误落在命中区域内，本次采样无效"
-                    : "透明区域的点：点击必须穿透到受控背景层，背景层收到点击即为穿透成功的直接证据"));
+                Note: "所有候选点都被盒子盖住了，本次无法采样（把盒子挪开或改小再跑）"));
         }
 
-        AddOutside("盒子外 · 右中", 0.72, 0.30);
-        AddOutside("盒子外 · 右下", 0.80, 0.60);
-        AddOutside("盒子外 · 中下", 0.45, 0.85);
+        AddOutside("盒子外 · 右中", (0.72, 0.30), (0.90, 0.22), (0.60, 0.08));
+        AddOutside("盒子外 · 右下", (0.80, 0.60), (0.92, 0.78), (0.70, 0.92));
+        AddOutside("盒子外 · 中下", (0.45, 0.85), (0.28, 0.93), (0.10, 0.78));
 
         return points;
     }

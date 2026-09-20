@@ -210,9 +210,9 @@ public partial class BoxView : UserControl
 
         // 顶部亮、底部暗：配合盒子顶部那条 1px 高光，读起来才像一块"被光照到的玻璃板"，
         // 而不是一块均匀的黑板。差值刻意留得明显——太均匀就没有材质感了。
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x36 + lift), (byte)(0x36 + lift), (byte)(0x37 + lift)), 0));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x28 + lift), (byte)(0x28 + lift), (byte)(0x29 + lift)), 0.45));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x1F + lift), (byte)(0x1F + lift), (byte)(0x20 + lift)), 1));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x2E + lift), (byte)(0x2E + lift), (byte)(0x2F + lift)), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x23 + lift), (byte)(0x23 + lift), (byte)(0x24 + lift)), 0.45));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, (byte)(0x1B + lift), (byte)(0x1B + lift), (byte)(0x1C + lift)), 1));
         return brush;
     }
 
