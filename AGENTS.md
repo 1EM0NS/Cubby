@@ -193,6 +193,7 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 & $app --dump-state            # 运行状态：盒子渲染、命中区域、鼠标计数、常驻资源（写 state.txt）
 & $app --render-preview       # 离屏渲染设计复核图 + P2 自检（写 design-preview.png），**全程不显示任何窗口**
 & $app --render-preview --out <目录>   # 指定输出目录，便于前后对比
+& $app --render-windows       # 离屏渲染各窗口的**内容**（写 window-preview.png），同样不显示任何窗口；标题栏不在其中
 & $app --diagnostics           # 常驻托盘 + 打开诊断面板
 & $app                         # 无参 = 常驻形态（只有托盘图标，不占任务栏）
 & $app --restore-on-exit       # 卸载前的收尾：还原桌面图标标记 + 移除开机自启，然后退出（幂等）
@@ -267,6 +268,26 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
 
 **改视觉前后各跑一次 `--render-preview`。** 它离屏渲染、不显示任何窗口，
 所以调样式时不会打扰正在用电脑的人；同时做 P2 自检（外扩带必须全透明），退出码 0 = 渲染成功且 P2 通过。
+
+### 「系统画的界面」清单：WPF 主题管不到的地方（用户连骂三轮的根源）
+
+深色应用里突然出现的任何一块"系统白"，都会被当成丑陋的 bug。这类东西**不在 WPF 视觉树里**，
+`CubbyTheme.xaml` 写得再全也盖不住。全部清单与对策：
+
+| 界面 | 谁画的 | 对策 |
+|---|---|---|
+| 窗口标题栏与圆角 | DWM 非客户区 | `Cubby.Shell/Desktop/FluentChrome.cs`（深色标题栏 + 系统圆角），`App` 里注册类处理器，每个窗口 Loaded 时统一套 |
+| 托盘右键菜单 | WinForms `ContextMenuStrip` | `Cubby.App/DarkMenuRenderer.cs`（文字色/悬停/对勾/箭头全自己画，WPF 主题管不到它） |
+| 悬停提示 | `ToolTip` 默认模板（系统色） | 主题里写完整 `ControlTemplate`（**不能加投影**——条目也有 ToolTip，会破坏 P2） |
+| 消息框 | 系统 `MessageBox` | `Cubby.App/CubbyDialog.cs`（深色窗口 + 强调色主按钮） |
+
+新窗口 / 新菜单 / 新提示**必须从这张表里对号入座**——漏一个就是用户截图骂回来的那一块白。
+（原话："白色标题栏加黑色背景…有时候还有黑色字体配深色背景，你直接去抄人家行吗"）
+
+**改窗口观感前后各跑一次 `--render-windows`**：离屏渲染设置 / 共存 / 崩溃 / 引导 / 对话框五个窗口的**内容**，
+不显示任何窗口。注意它看不到标题栏（DWM 画的，不在 WPF 视觉树里），标题栏只能靠 `FluentChrome` 保证。
+另一个坑：内容从窗口摘出来后 `Foreground` 继承链会断，渲染工具必须把窗口的前景色补回宿主，
+否则预览图上的"黑字"是工具的失真，不是真实观感。
 
 ### `LayoutProbe` 只做逻辑，端到端仍是人工项
 
