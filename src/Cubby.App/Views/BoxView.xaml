@@ -6,106 +6,118 @@
              Drop="OnDrop">
     <!--
         设计约束（P2）：盒子的所有绘制都必须落在盒子矩形内部。
-        这里刻意不使用任何 Effect（阴影 / 模糊都会向外扩散成 alpha>0 的像素，从而抢走盒子外的点击）。
-        立体感一律用「渐变底 + 顶部高光 + 左侧强调条 + 描边」实现。
+        这里刻意不使用任何**向外扩散**的 Effect（阴影会抢走盒子外的点击）；
+        BackdropImage 的模糊被圆角 Clip 严格限制在盒子矩形内，是安全的。
+        观感对照 DeskBox（Tianyu199509/DeskBox, GPL-3.0）：模糊壁纸 + 深色罩的亚克力底层、
+        无边框描边、标题栏按钮悬停才出现。
     -->
     <Grid>
-        <Border x:Name="Root" BorderThickness="1">
+        <Border x:Name="Root" BorderThickness="0">
             <Grid>
-                <!--
-                    左侧强调条：**默认不显示**，只在"需要提醒"的状态下由代码点亮
-                    （锁定 / 映射文件夹）。普通盒子不画任何色条——
-                    桌面上一眼望去全是彩色竖条，是上一版最刺眼的观感问题。
-                -->
-                <Border x:Name="AccentBar"
-                        Width="2.5"
-                        Height="22"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Top"
-                        CornerRadius="1.25"
-                        Margin="0,7,0,0"
-                        Visibility="Collapsed" />
+                <!-- 亚克力底层：壁纸裁剪 + 高斯模糊（DeskBox 的 Acrylic 材质）。
+                     没有壁纸（纯色桌面）时保持 Collapsed，由 TintPlate 的渐变罩兜底。 -->
+                <Image x:Name="BackdropImage"
+                       Stretch="Fill"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False">
+                    <Image.Effect>
+                        <!-- 圆角裁切内的模糊；扩边取样由 WallpaperBackdrop.Crop 保证 -->
+                        <BlurEffect Radius="40" />
+                    </Image.Effect>
+                </Image>
 
-                <DockPanel>
+                <!-- 深色罩：决定盒子的明暗；透明度跟随用户设置（亚克力层的"浓度"） -->
+                <Border x:Name="TintPlate" CornerRadius="8" />
 
-                    <Border x:Name="TitleBar"
-                            DockPanel.Dock="Top"
-                            Height="36"
-                            Background="Transparent"
-                            BorderThickness="0,0,0,1"
-                            BorderBrush="#12FFFFFF"
-                            MouseLeftButtonDown="OnTitleMouseDown"
-                            MouseMove="OnTitleMouseMove"
-                            MouseLeftButtonUp="OnTitleMouseUp">
-                        <Grid>
-                            <TextBlock x:Name="TitleIcon"
-                                       Margin="14,0,0,0"
-                                       HorizontalAlignment="Left"
-                                       VerticalAlignment="Center"
-                                       FontFamily="{StaticResource Cubby.Font.Icon}"
-                                       FontSize="11"
-                                       Visibility="Collapsed" />
+                <Grid>
+                    <!--
+                        左侧强调条：**默认不显示**，只在"需要提醒"的状态下由代码点亮
+                        （锁定 / 映射文件夹）。普通盒子不画任何色条——
+                        桌面上一眼望去全是彩色竖条，是上一版最刺眼的观感问题。
+                    -->
+                    <Border x:Name="AccentBar"
+                            Width="2.5"
+                            Height="22"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            CornerRadius="1.25"
+                            Margin="0,7,0,0"
+                            Visibility="Collapsed" />
 
-                            <TextBlock x:Name="TitleText"
-                                       Margin="14,0,0,0"
-                                       VerticalAlignment="Center"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis" />
+                    <DockPanel>
 
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <Button x:Name="DesktopIconButton"
-                                        Style="{StaticResource Cubby.Button.Icon}"
-                                        Margin="0,0,2,0"
-                                        ToolTip="隐藏 / 显示真实桌面图标（Ctrl+Alt+H）"
-                                        Click="OnToggleDesktopIcons" />
-                                <Button x:Name="SearchButton"
-                                        Style="{StaticResource Cubby.Button.Icon}"
-                                        Margin="0,0,2,0"
-                                        ToolTip="搜索这个盒子里的条目"
-                                        Click="OnSearch" />
-                                <Button x:Name="LockButton"
-                                        Style="{StaticResource Cubby.Button.Icon}"
-                                        Margin="0,0,2,0"
-                                        ToolTip="锁定后不能拖动与缩放"
-                                        Click="OnToggleLock" />
-                                <Button x:Name="CollapseButton"
-                                        Style="{StaticResource Cubby.Button.Icon}"
-                                        Margin="0,0,10,0"
-                                        ToolTip="折叠 / 展开"
-                                        Click="OnToggleCollapse" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+                        <Border x:Name="TitleBar"
+                                DockPanel.Dock="Top"
+                                Height="40"
+                                Background="Transparent"
+                                BorderThickness="0,0,0,1"
+                                BorderBrush="#0FFFFFFF"
+                                MouseLeftButtonDown="OnTitleMouseDown"
+                                MouseMove="OnTitleMouseMove"
+                                MouseLeftButtonUp="OnTitleMouseUp">
+                            <Grid>
+                                <TextBlock x:Name="TitleIcon"
+                                           Margin="14,0,0,0"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{StaticResource Cubby.Font.Icon}"
+                                           FontSize="11"
+                                           Visibility="Collapsed" />
 
-                    <ScrollViewer x:Name="ItemArea"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Padding="10,4,6,8">
-                        <ItemsControl x:Name="ItemsHost">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel x:Name="ItemsPanelHost" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
+                                <TextBlock x:Name="TitleText"
+                                           Margin="14,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
 
-                </DockPanel>
+                                <!--
+                                    标题栏按钮：DeskBox 的做法是悬停盒子才出现（平时桌面干净）。
+                                    透明时同时关掉命中，避免一排看不见的按钮挡住标题栏点击。
+                                -->
+                                <StackPanel x:Name="TitleActions"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Opacity="0"
+                                            IsHitTestVisible="False">
+                                    <Button x:Name="DesktopIconButton"
+                                            Style="{StaticResource Cubby.Button.Icon}"
+                                            Margin="0,0,2,0"
+                                            ToolTip="隐藏 / 显示真实桌面图标（Ctrl+Alt+H）"
+                                            Click="OnToggleDesktopIcons" />
+                                    <Button x:Name="SearchButton"
+                                            Style="{StaticResource Cubby.Button.Icon}"
+                                            Margin="0,0,2,0"
+                                            ToolTip="搜索这个盒子里的条目"
+                                            Click="OnSearch" />
+                                    <Button x:Name="LockButton"
+                                            Style="{StaticResource Cubby.Button.Icon}"
+                                            Margin="0,0,2,0"
+                                            ToolTip="锁定后不能拖动与缩放"
+                                            Click="OnToggleLock" />
+                                    <Button x:Name="CollapseButton"
+                                            Style="{StaticResource Cubby.Button.Icon}"
+                                            Margin="0,0,12,0"
+                                            ToolTip="折叠 / 展开"
+                                            Click="OnToggleCollapse" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
 
-                <!--
-                    玻璃顶部受光：盒子内侧一条 1px 的白色渐隐线。
-                    这是"玻璃板"而不是"黑板"的关键一笔——它让顶部看起来是被光照到的边。
-                    必须在盒子矩形内（P2），所以只占顶部 1px，绝不向外扩。
-                -->
-                <Border Height="1" VerticalAlignment="Top" IsHitTestVisible="False">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Offset="0" Color="#00FFFFFF" />
-                            <GradientStop Offset="0.3" Color="#4DFFFFFF" />
-                            <GradientStop Offset="0.7" Color="#4DFFFFFF" />
-                            <GradientStop Offset="1" Color="#00FFFFFF" />
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+                        <ScrollViewer x:Name="ItemArea"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Padding="10,6,6,8">
+                            <ItemsControl x:Name="ItemsHost">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel x:Name="ItemsPanelHost" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                    </DockPanel>
+                </Grid>
             </Grid>
         </Border>
 

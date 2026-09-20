@@ -270,6 +270,17 @@ $app = ".\src\Cubby.App\bin\Release\net8.0-windows\Cubby.App.exe"
   选中态用**左侧一条 3px 的选中条**而不是大块填色；**打开条目后窗口必须自己关掉**——
   搜索是"找到 → 打开 → 继续干活"，留着一个空窗口只会挡事（用户原话："烂标题栏放在那里"）。
   键盘逻辑收在窗口层（Enter/Esc/↑/↓），保证焦点在输入框或列表里同一套快捷键都生效。
+- **盒子的"亚克力" = 模糊壁纸 + 深色罩**（`Views/WallpaperBackdrop.cs`，对照 DeskBox 的 Acrylic 截图）：
+  壁纸从注册表 `HKCU\Control Panel\Desktop\Wallpaper` 读（JPEG 转码壁纸退回 `TranscodedWallpaper`），
+  按盒子位置裁一块、BlurEffect 模糊（半径 40）、罩 75% 黑的上亮下暗渐变；**不画描边**。
+  浓度跟随用户透明度设置。纯色桌面（无壁纸）退回原来的渐变底 + 描边。
+  关键实现点：裁剪要**向外扩 48px** 给模糊取样（否则边缘有一圈模糊出来的暗边）；
+  Image 必须用圆角 `Clip` 裁进盒子矩形（P2）；换壁纸用 `SystemEvents.UserPreferenceChanged` →
+  `WallpaperBackdrop.Invalidate()` 广播，BoxView 订阅重裁（Unloaded 必须退订，否则静态事件泄漏）。
+  `--render-preview` 的 P2 自检要**先关壁纸底层**（`WallpaperBackdrop.Enabled=false`）再查透明外扩带；
+  视觉图那遍用真实壁纸当画布、盒子摆在真实桌面坐标，图上所见 = 桌面所见。
+- **标题栏按钮悬停才出现**（DeskBox `WidgetShell` 的做法）：`TitleActions` 平时 Opacity=0
+  **且 IsHitTestVisible=False**——一排看不见的按钮不能挡标题栏的点击与拖动。
 - **`BooleanToVisibilityConverter` 不是免声明的内置资源。** 在 XAML 里直接
   `{StaticResource BooleanToVisibilityConverter}` 会抛 XamlParseException
   （"在 StaticResourceHolder 上提供值时引发了异常"）——必须先在主题里声明一个

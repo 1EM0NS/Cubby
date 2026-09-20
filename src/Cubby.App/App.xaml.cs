@@ -62,6 +62,15 @@ public partial class App : Application
 
         ApplyFluentChromeToEveryWindow();
 
+        // 用户在系统里换壁纸时，盒子的亚克力底层要跟着重裁
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, e) =>
+        {
+            if (e.Category is Microsoft.Win32.UserPreferenceCategory.Desktop or Microsoft.Win32.UserPreferenceCategory.General)
+            {
+                Views.WallpaperBackdrop.Invalidate();
+            }
+        };
+
         var options = SpikeOptions.Parse(e.Args);
 
         if (options.UninstallAutoStart)
