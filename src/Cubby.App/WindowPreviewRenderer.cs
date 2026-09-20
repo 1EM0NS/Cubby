@@ -34,6 +34,7 @@ internal static class WindowPreviewRenderer
                 "这是给设计复核用的样例文案，用来检查深色界面上的文字是否全部浅色。",
                 null)),
             ("首次引导", () => new OnboardingWindow(() => "预览")),
+            ("搜索", BuildSearchSample),
             ("确认对话框", () => new Window
             {
                 Style = (Style)Application.Current.FindResource("Cubby.Window"),
@@ -107,6 +108,27 @@ internal static class WindowPreviewRenderer
         encoder.Save(stream);
 
         return path;
+    }
+
+    /// <summary>搜索窗口样例：真实索引 + 带各类扩展名的假路径（shell 按扩展名给真图标）。</summary>
+    private static Window BuildSearchSample()
+    {
+        var search = new SearchService();
+        var box = new Box("preview-search", "工作资料", new DipRect(0, 0, 372, 296))
+        {
+            Items =
+            [
+                new BoxItem("s1", "项目文档", @"C:\work\项目文档", ItemKind.Folder),
+                new BoxItem("s2", "预算表.xlsx", @"C:\work\预算表.xlsx", ItemKind.File),
+                new BoxItem("s3", "会议记录.docx", @"C:\work\会议记录.docx", ItemKind.File),
+                new BoxItem("s4", "产品手册.pdf", @"C:\work\产品手册.pdf", ItemKind.File),
+                new BoxItem("s5", "官网首页", "https://example.com", ItemKind.Url),
+            ],
+        };
+
+        search.RebuildAll([box]);
+
+        return new SearchWindow(box.Id, box.Name, search, _ => { });
     }
 
     private static Border BuildCard(string name, Func<Window> factory)

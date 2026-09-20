@@ -50,6 +50,11 @@
     <SolidColorBrush x:Key="Cubby.Brush.Ok" Color="{StaticResource Cubby.Color.Accent}" />
     <SolidColorBrush x:Key="Cubby.Brush.Caution" Color="{StaticResource Cubby.Color.Warn}" />
 
+    <!-- ================= 转换器 =================
+         BooleanToVisibilityConverter **不是** WPF 的免声明内置资源（踩过：XamlParseException
+         "在 StaticResourceHolder 上提供值时引发了异常"），用之前必须在这里声明。 -->
+    <BooleanToVisibilityConverter x:Key="Cubby.BoolToVisibility" />
+
     <!-- ================= 字体 ================= -->
     <!-- 优先 Segoe UI Variable（Windows 11 的系统字体），Win10 回退 Segoe UI；
          中文字形这两者都没有，会逐字回退到微软雅黑——和 Windows 自己的做法一致 -->
